@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Settings → **Features** is one grouped list: each feature has a plain description, a switch and, where it has more settings, a Configure link. A summary shows how many are on and what needs your attention, filters show On, Off, Needs attention or Advanced, and extra options appear only once a feature is on. Checks and project runs have their own tab; local language server, code index and browser check files sit under Advanced setup.
+- Computer Use has a **Stay ready after restart** switch, off by default: on, it resumes by itself when zer0ne starts for the apps you allowed, instead of waiting for Resume. Moving your mouse or typing still pauses it, and Stop still stops it.
 - When Computer Use can't act because no app is allowed or it is paused, the chat now says which of the two is missing, and its Next step button opens Computer Use permissions instead of Browser settings.
 - **Browser & Computer Use**: Computer Use settings (on/off, Design cursor effects, screenshot history and app permissions) are now on the browser page, renamed Browser & Computer Use in the desktop app.
 

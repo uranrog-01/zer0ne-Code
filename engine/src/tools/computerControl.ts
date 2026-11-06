@@ -3,7 +3,7 @@ import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { acquireRuntimeLease } from '../runtimeLease';
 
-export interface ComputerPolicy { epoch: string; paused: boolean; allowed: string[]; stop?: string }
+export interface ComputerPolicy { epoch: string; paused: boolean; allowed: string[]; stop?: string; resumeOnStart?: boolean }
 export interface ComputerActivity { id: string; pid: number; action: string; session: string; at: number; epoch: string }
 export interface ComputerPresentation { id: string; pid: number; session: string; epoch: string; at: number; windowId: string; processId: number; action: string; x?: number; y?: number; theme?: string; reducedMotion?: boolean; effects?: string }
 export function presentComputer(storage: string, value: Omit<ComputerPresentation, 'id' | 'pid' | 'at'>): ComputerPresentation {

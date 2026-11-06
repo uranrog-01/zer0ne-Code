@@ -182,6 +182,22 @@ test('permissions default paused, survive restart and invalidate observations af
 	} finally {f.cleanup();}
 });
 
+test('Stay ready after restart resumes only when chosen and an app is allowed',()=>{
+	const stop=require('../../app/computer-stop'), control=require(path.join(engineOut,'tools/computerControl'));
+	const dir=fs.mkdtempSync(path.join(os.tmpdir(),'zc-stay-')), cu=path.join(dir,'computer-use');
+	try {
+		fs.mkdirSync(cu,{recursive:true});
+		control.changeComputerPolicy(dir,p=>{p.allowed=['C:\\allowed.exe'];p.paused=false;});
+		stop.requestStop(cu); assert.equal(control.computerPolicy(dir).paused,true,'a restart pauses by default');
+		assert.equal(stop.resumeAfterRestart(cu),false); assert.equal(control.computerPolicy(dir).paused,true);
+		control.changeComputerPolicy(dir,p=>{p.resumeOnStart=true;});
+		const before=control.computerPolicy(dir).epoch;
+		stop.requestStop(cu); assert.equal(stop.resumeAfterRestart(cu),true);
+		const after=control.computerPolicy(dir); assert.equal(after.paused,false,'chosen: ready again after restart'); assert.notEqual(after.epoch,before,'old observations stay invalid');
+		control.changeComputerPolicy(dir,p=>{p.allowed=[];}); stop.requestStop(cu);
+		assert.equal(stop.resumeAfterRestart(cu),false,'no allowed app: stays paused'); assert.equal(control.computerPolicy(dir).paused,true);
+	} finally { fs.rmSync(dir,{recursive:true,force:true}); }
+});
 test('Stop cancels pending approval and running input across independent engines; resume cannot revive either',async()=>{
 	const f=fixture(), control=require(path.join(engineOut,'tools/computerControl'));
 	try {
