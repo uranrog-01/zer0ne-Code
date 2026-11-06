@@ -1,0 +1,228 @@
+/* The notch: one black shape flush with the top of the screen that morphs between a thin
+ * line, a resting pill, a live pill and the open panel; the window around it is transparent. */
+:root {
+	color-scheme: dark;
+	--ink: #f5f5f7;
+	--text: #c7c7cc;
+	--muted: #8e8e93;
+	--faint: #636366;
+	--line: rgba(255, 255, 255, 0.08);
+	--well: rgba(255, 255, 255, 0.06);
+	--well-hover: rgba(255, 255, 255, 0.1);
+	--spring: cubic-bezier(0.34, 1.32, 0.52, 1);
+	--ease: cubic-bezier(0.32, 0.72, 0.24, 1);
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; background: transparent; overflow: hidden; }
+body { display: flex; justify-content: center; align-items: flex-start; font: 13px/18px "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif; color: var(--ink); -webkit-font-smoothing: antialiased; user-select: none; }
+button { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
+
+/* One accent per phase, wherever data-phase appears. */
+[data-phase] { --a: #64d2ff; }
+[data-phase="thinking"] { --a: #bf5af2; }
+[data-phase="writing"] { --a: #5e9eff; }
+[data-phase="tool"], [data-phase="working"] { --a: #64d2ff; }
+[data-phase="waiting"] { --a: #ff9f0a; }
+[data-phase="done"] { --a: #30d158; }
+[data-phase="failed"], [data-kind="crash"], [data-kind="failed"] { --a: #ff453a; }
+[data-kind="done"] { --a: #30d158; }
+[data-phase="offline"] { --a: #ff6961; }
+[data-phase="online"] { --a: #30d158; }
+[data-phase="battery"] { --a: #ffd60a; }
+[data-phase="mic"] { --a: #ff375f; }
+[data-phase="welcome"] { --a: #5ac8fa; }
+[data-kind="waiting"] { --a: #ff9f0a; }
+[data-phase="stuck"] { --a: #ffb340; }
+[data-phase="budget"] { --a: #f5c542; }
+[data-phase="cloud"] { --a: #8e9bff; }
+
+.notch {
+	--w: 150px; --h: 32px;
+	position: relative; overflow: hidden; width: var(--w); height: var(--h);
+	border-radius: 0 0 16px 16px; background: #000;
+	box-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.9), inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+	transition: width 420ms var(--spring), height 420ms var(--spring), border-radius 320ms var(--ease), box-shadow 300ms ease;
+	animation: drop 420ms var(--spring) both;
+}
+.notch[data-mode="live"] { border-radius: 0 0 18px 18px; }
+.notch[data-mode="rest"] { border-radius: 0 0 13px 13px; }
+/* The line over other windows, drawn like Nusa's closed tab: flush with the screen's top edge, its
+ * sides tapering in to softly rounded bottom corners, pure black with no shadow, so it reads as part
+ * of the display rather than a window. Work runs along it in the phase's colour; an approval glows. */
+.notch[data-mode="line"] {
+	border-radius: 0; box-shadow: none;
+	clip-path: polygon(0 0, 100% 0, calc(100% - 4px) calc(100% - 2.5px), calc(100% - 5.5px) calc(100% - 0.6px), calc(100% - 7.5px) 100%, 7.5px 100%, 5.5px calc(100% - 0.6px), 4px calc(100% - 2.5px));
+}
+.notch[data-mode="line"] .compact { opacity: 0; pointer-events: none; }
+.notch[data-mode="line"][data-live] .edge { left: 12px; right: 12px; height: 1.5px; bottom: 1px; opacity: 1; animation: sweep 1.8s ease-in-out infinite; }
+.notch[data-mode="line"][data-phase="waiting"] { background: color-mix(in srgb, var(--a) 85%, #000); animation: beacon 1.6s ease-in-out infinite; }
+.notch[data-mode="open"] { border-radius: 0 0 30px 30px; box-shadow: 0 18px 48px -16px rgba(0, 0, 0, 0.95), inset 0 -1px 0 rgba(255, 255, 255, 0.06); }
+.notch.leaving { animation: lift 320ms var(--ease) both; }
+.notch.pop { animation: pop 420ms var(--spring); }
+/* Waiting for you: a soft accent halo around the whole notch. */
+.notch[data-phase="waiting"]:not([data-mode="rest"]) { box-shadow: 0 0 0 1px color-mix(in srgb, var(--a) 45%, transparent), 0 10px 34px -10px color-mix(in srgb, var(--a) 55%, transparent); }
+
+/* The live edge: a thin accent line running along the bottom while work happens. */
+.edge { position: absolute; left: 18%; right: 18%; bottom: 0; height: 2px; border-radius: 2px; opacity: 0; pointer-events: none;
+	background: linear-gradient(90deg, transparent, var(--a), transparent); background-size: 50% 100%; background-repeat: no-repeat;
+	transition: opacity 300ms ease; }
+.notch[data-mode="live"][data-live] .edge { opacity: 0.9; animation: sweep 1.8s ease-in-out infinite; }
+
+.compact, .expanded { position: absolute; top: 0; left: 0; transition: opacity 200ms ease, filter 260ms ease, transform 320ms var(--ease); }
+.compact { right: 0; height: var(--h); display: flex; align-items: center; gap: 9px; padding: 0 14px 0 9px; }
+.expanded { width: 420px; padding: 12px 14px 14px; opacity: 0; filter: blur(6px); transform: scale(0.96); transform-origin: top center; pointer-events: none; }
+.notch[data-mode="open"] .compact { opacity: 0; filter: blur(4px); pointer-events: none; }
+.notch[data-mode="open"] .expanded { opacity: 1; filter: none; transform: none; pointer-events: auto; transition-delay: 70ms; }
+.notch[data-mode="rest"] .compact { gap: 6px; padding: 0 10px; justify-content: center; }
+.notch[data-mode="rest"] .label { font-size: 11.5px; }
+.notch[data-mode="rest"] .badge { min-width: 16px; height: 16px; padding: 0 5px; font-size: 10px; line-height: 16px; }
+
+/* Glyph: a ring that shows plan progress, turns while a step runs and breathes while thinking. */
+.glyph { position: relative; display: grid; flex: none; place-items: center; width: 22px; height: 22px; color: var(--a); }
+.glyph .ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+.glyph .ring circle { fill: none; stroke-width: 2.2; }
+.glyph .track { stroke: color-mix(in srgb, var(--a) 22%, transparent); }
+.glyph .arc { stroke: var(--a); stroke-linecap: round; transition: stroke-dashoffset 500ms var(--ease); }
+.glyph .icon { position: relative; width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.glyph.spin .ring { animation: spin 1.2s linear infinite; }
+.glyph.breathe .icon { animation: breathe 1.6s ease-in-out infinite; }
+.glyph.solid { border-radius: 50%; background: var(--a); color: #000; }
+.glyph.solid .ring { display: none; }
+.glyph.solid.pulse { animation: halo 1.5s ease-out infinite; }
+.glyph.sm { width: 18px; height: 18px; }
+.glyph.sm .icon { width: 10px; height: 10px; }
+.glyph .bars { position: relative; display: flex; align-items: center; gap: 2px; height: 10px; }
+.glyph .bars i { width: 2px; height: 100%; border-radius: 1px; background: currentColor; animation: wave 900ms ease-in-out infinite; }
+.glyph .bars i:nth-child(2) { animation-delay: 150ms; }
+.glyph .bars i:nth-child(3) { animation-delay: 300ms; }
+
+.label { flex: 1; min-width: 0; overflow: hidden; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; text-overflow: ellipsis; }
+.shimmer { background: linear-gradient(90deg, var(--ink) 0%, var(--ink) 40%, color-mix(in srgb, var(--a) 70%, #fff) 50%, var(--ink) 60%, var(--ink) 100%); background-size: 250% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: shimmer 2.2s linear infinite; }
+.meta { flex: none; max-width: 45%; overflow: hidden; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; text-overflow: ellipsis; }
+.badge { flex: none; min-width: 18px; height: 18px; padding: 0 6px; border-radius: 999px; background: rgba(255, 255, 255, 0.12); color: var(--ink); font-size: 11px; font-weight: 600; line-height: 18px; text-align: center; }
+.notch[data-mode="rest"] .label { flex: none; color: var(--muted); font-weight: 500; }
+.notch[data-mode="rest"] .badge { background: #0a84ff; }
+.logo { flex: none; opacity: 0.95; }
+
+/* Open panel */
+.head { display: flex; align-items: center; gap: 8px; padding: 2px 2px 10px; }
+.brand { font-weight: 600; letter-spacing: -0.01em; }
+.summary { flex: 1; min-width: 0; overflow: hidden; color: var(--muted); font-size: 12px; white-space: nowrap; text-overflow: ellipsis; }
+.icon-btn { display: grid; place-items: center; width: 26px; height: 26px; margin: 0; padding: 0; border: 0; border-radius: 50%; background: var(--well); cursor: pointer; transition: background 140ms ease; }
+.icon-btn:hover { background: var(--well-hover); }
+.icon-btn svg, .empty svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+.runs { display: grid; gap: 6px; }
+.run { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 4px 10px; width: 100%; margin: 0; padding: 9px 10px; border: 0; border-radius: 14px; background: var(--well); text-align: left; cursor: pointer; transition: background 140ms ease, transform 140ms ease; }
+.run:hover { background: var(--well-hover); }
+.run:active { transform: scale(0.985); }
+.run-text { min-width: 0; }
+.run-name { display: block; overflow: hidden; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+.run-what { display: block; overflow: hidden; color: var(--text); font-size: 12px; white-space: nowrap; text-overflow: ellipsis; }
+.run-what.mono { font-family: "Cascadia Mono", Consolas, ui-monospace, monospace; font-size: 11.5px; }
+.run-time { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.plan { grid-column: 2 / 4; display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; }
+.plan .bar { flex: 0 0 72px; height: 3px; border-radius: 2px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
+.plan .bar i { display: block; height: 100%; border-radius: 2px; background: var(--a); transition: width 500ms var(--ease); }
+.plan span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.run[data-phase="waiting"] { background: color-mix(in srgb, var(--a) 12%, var(--well)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--a) 35%, transparent); cursor: default; }
+.ask { grid-column: 1 / 4; display: flex; gap: 8px; padding-top: 6px; }
+.btn { height: 28px; margin: 0; padding: 0 14px; border: 0; border-radius: 999px; background: rgba(255, 255, 255, 0.1); font-size: 12px; font-weight: 600; cursor: pointer; transition: background 140ms ease, transform 140ms ease, filter 140ms ease; }
+.btn:hover { background: rgba(255, 255, 255, 0.16); }
+.btn.primary { background: var(--a); color: #000; }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn:active { transform: scale(0.97); }
+
+.run.brief { background: color-mix(in srgb, var(--a) 12%, var(--well)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--a) 30%, transparent); cursor: default; }
+.stats { grid-column: 1 / 4; display: flex; flex-wrap: wrap; gap: 6px; padding-top: 4px; }
+.stat { padding: 2px 9px; border-radius: 999px; background: color-mix(in srgb, var(--a) 18%, transparent); color: color-mix(in srgb, var(--a) 70%, #fff); font-size: 11px; font-weight: 600; }
+.stat.plain { background: rgba(255, 255, 255, 0.08); color: var(--text); }
+.stat.lines { display: inline-flex; gap: 6px; font-variant-numeric: tabular-nums; }
+.stat .add { color: #30d158; font-weight: 600; }
+.stat .del { color: #ff6961; font-weight: 600; }
+
+/* A Workflow's workers: one dot each, filled when done, breathing while it runs, hollow while it waits. */
+.run .goal { grid-column: 2 / 4; overflow: hidden; color: #8e9bff; font-size: 11px; white-space: nowrap; text-overflow: ellipsis; }
+.lanes, .meter { grid-column: 2 / 4; display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; }
+.lanes span, .meter span:last-child { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.dots { display: flex; flex: none; gap: 3px; }
+.dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--a); }
+.dots i.done { background: #30d158; }
+.dots i.failed { background: #ff453a; }
+.dots i.running { animation: breathe 1.4s ease-in-out infinite; }
+.dots i.queued { background: none; box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.3); }
+/* The cost meter warms as the budget fills. */
+.meter .bar { flex: 0 0 72px; height: 3px; border-radius: 2px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
+.meter .bar i { display: block; height: 100%; border-radius: 2px; background: #30d158; transition: width 500ms var(--ease); }
+.meter .bar[data-level="high"] i { background: #ffb340; }
+.meter .bar[data-level="over"] i { background: #ff453a; }
+.run[data-phase="stuck"], .run[data-phase="budget"] { background: color-mix(in srgb, var(--a) 10%, var(--well)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--a) 30%, transparent); cursor: default; }
+.run > .stats { padding-top: 2px; }
+div.run { cursor: default; }
+.recent { margin-top: 12px; }
+.sec { display: flex; align-items: center; justify-content: space-between; padding: 0 4px 6px; color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.link { margin: 0; padding: 0; border: 0; background: none; color: #64a8ff; font-size: 11px; font-weight: 600; letter-spacing: 0; text-transform: none; cursor: pointer; }
+.link:hover { text-decoration: underline; }
+.notes { display: grid; }
+.note { display: grid; grid-template-columns: 8px auto 1fr auto; align-items: center; gap: 8px; width: 100%; margin: 0; padding: 7px 6px; border: 0; border-radius: 10px; background: none; text-align: left; cursor: pointer; transition: background 140ms ease; }
+.note:hover { background: var(--well); }
+.note[disabled] { cursor: default; }
+.note .dot { width: 6px; height: 6px; border-radius: 50%; background: #0a84ff; }
+.note.read .dot { background: transparent; }
+.note .glyph { width: 16px; height: 16px; }
+.note .glyph .icon { width: 9px; height: 9px; stroke-width: 2.2; }
+.note-text { min-width: 0; overflow: hidden; color: var(--text); font-size: 12px; white-space: nowrap; text-overflow: ellipsis; }
+.note-text b { color: var(--ink); font-weight: 600; }
+.note.read .note-text { color: var(--muted); }
+.note-time { color: var(--faint); font-size: 11px; white-space: nowrap; }
+.empty { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 0 6px; color: var(--muted); }
+
+/* Acting from the notch: the approval spelled out, a reply line, a run's health, next steps. */
+.btn[data-danger] { background: color-mix(in srgb, #ff453a 22%, transparent); color: #ff9b94; }
+.btn[data-danger]:hover { background: color-mix(in srgb, #ff453a 32%, transparent); }
+.ask { flex-wrap: wrap; }
+.approval { grid-column: 1 / 4; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; padding-top: 6px; }
+.approval-verb { color: var(--muted); font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.approval-what { display: -webkit-box; overflow: hidden; padding: 7px 9px; border-radius: 9px; background: rgba(0, 0, 0, 0.45); color: var(--ink); font: 11.5px/16px "Cascadia Mono", Consolas, ui-monospace, monospace; white-space: pre-wrap; overflow-wrap: anywhere; -webkit-line-clamp: 4; -webkit-box-orient: vertical; user-select: text; }
+.approval .stats { grid-column: auto; padding-top: 0; }
+.health { padding-top: 2px; }
+.reply { grid-column: 1 / 4; display: flex; gap: 6px; padding-top: 6px; }
+.reply input, .asker-input { flex: 1; min-width: 0; height: 28px; margin: 0; padding: 0 11px; border: 0; border-radius: 999px; background: rgba(255, 255, 255, 0.08); color: var(--ink); font: inherit; font-size: 12px; outline: none; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
+.reply input:focus, .asker-input:focus { box-shadow: inset 0 0 0 1px #64a8ff; }
+.reply input::placeholder, .asker-input::placeholder { color: var(--faint); }
+.run.selected { box-shadow: inset 0 0 0 1px rgba(100, 168, 255, 0.7); }
+.icon-btn.on { background: rgba(100, 168, 255, 0.22); color: #9cc7ff; }
+.icon-btn[hidden] { display: none; }
+/* Asking about something dropped (or copied). */
+.asker { display: grid; gap: 7px; margin: 0 0 10px; padding: 10px; border-radius: 14px; background: var(--well); box-shadow: inset 0 0 0 1px rgba(100, 168, 255, 0.35); }
+.asker-files { display: flex; flex-wrap: wrap; gap: 6px; }
+.asker-row { display: flex; gap: 6px; }
+.asker-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { height: 24px; margin: 0; padding: 0 10px; border: 0; border-radius: 999px; background: rgba(255, 255, 255, 0.08); color: var(--text); font-size: 11.5px; font-weight: 600; cursor: pointer; }
+.chip:hover { background: rgba(255, 255, 255, 0.14); }
+.drop-hint { margin: 0 0 10px; padding: 9px; border: 1px dashed rgba(255, 255, 255, 0.18); border-radius: 12px; color: var(--muted); font-size: 11.5px; text-align: center; }
+.notch.dropping .drop-hint { border-color: #64a8ff; color: #9cc7ff; background: rgba(100, 168, 255, 0.08); }
+
+/* Calm motion (Settings → Appearance): what shows work keeps moving; the decoration rests. */
+body[data-motion="calm"] .shimmer { color: var(--ink); background: none; animation: none; }
+body[data-motion="calm"] .notch.pop, body[data-motion="calm"] .glyph.breathe .icon, body[data-motion="calm"] .glyph.solid.pulse, body[data-motion="calm"] .dots i.running { animation: none; }
+body[data-motion="calm"] .notch[data-mode="line"][data-phase="waiting"] { animation: none; }
+
+.icon-btn:focus-visible, .run:focus-visible, .note:focus-visible, .btn:focus-visible, .link:focus-visible, .chip:focus-visible { outline: 2px solid #64a8ff; outline-offset: 2px; }
+
+@keyframes drop { from { opacity: 0; transform: translateY(-100%); } }
+@keyframes lift { to { opacity: 0; transform: translateY(-100%); } }
+@keyframes pop { 40% { transform: scale(1.04); } }
+@keyframes sweep { 0% { background-position: -100% 0; } 100% { background-position: 200% 0; } }
+@keyframes spin { to { transform: rotate(270deg); } }
+@keyframes breathe { 50% { opacity: 0.45; transform: scale(0.86); } }
+@keyframes wave { 0%, 100% { transform: scaleY(0.35); } 50% { transform: scaleY(1); } }
+@keyframes shimmer { from { background-position: 125% 0; } to { background-position: -125% 0; } }
+@keyframes beacon { 50% { filter: brightness(1.45) saturate(1.2); } }
+@keyframes halo { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--a) 60%, transparent); } 100% { box-shadow: 0 0 0 7px transparent; } }
+@media (prefers-reduced-motion: reduce) {
+	.notch, .compact, .expanded, .edge, .plan .bar i, .meter .bar i, .glyph .arc, .dots i { transition: none; animation: none !important; }
+	.glyph *, .glyph, .shimmer { animation: none !important; }
+	.shimmer { color: var(--ink); background: none; }
+}

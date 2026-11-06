@@ -1,0 +1,21 @@
+node_modules/
+dist/
+app/release-integrity.json
+engine/bin/
+engine/out/
+engine/engine.json
+engine/.out-build-*/
+test/output/
+engine/eval/results/
+
+# Local agent state
+.claude/
+.zcode/
+
+# Secrets and signing material
+.env
+.env.*
+*.pem
+*.key
+*.pfx
+*.p12

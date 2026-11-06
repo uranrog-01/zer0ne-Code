@@ -1,0 +1,17 @@
+'use strict';
+const vm=require('vm'), assert=require('assert'), ts=require('typescript-classic');
+const {JSDOM}=require('jsdom');
+const source=require('./page-scripts').readPage('settings.js');
+const ast=ts.createSourceFile('settings.js',source,ts.ScriptTarget.Latest,true,ts.ScriptKind.JS);
+let renderer;
+ts.forEachChild(ast,function visit(node){if(ts.isFunctionDeclaration(node)&&node.name?.text==='openMcpDialog')renderer=node.getText(ast);ts.forEachChild(node,visit);});
+assert(renderer);
+const dom=new JSDOM('<body></body>'),posts=[],toasts=[];let dialog;
+const context={esc:s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'),toast:(...v)=>toasts.push(v),post:m=>posts.push(m),isUrlExample:()=>false,openDialog:()=>{const body=dom.window.document.createElement('div'),foot=dom.window.document.createElement('div');dom.window.document.body.append(body,foot);dialog={body,foot,close(){}};return dialog;}};
+vm.createContext(context);vm.runInContext(renderer,context);
+const args=['{"key":"two words"}','','C:\\folder with spaces\\','%LITERAL%','quote"inside'];
+context.openMcpDialog({id:'test',name:'test',transport:'stdio',command:'node',args,env:{},headers:{},enabled:true,trusted:false});
+assert.deepEqual(JSON.parse(dialog.body.querySelector('#mcp-args').value),args);
+dialog.foot.querySelector('[data-save]').click();assert.deepEqual(Array.from(posts[0].server.args),args);
+dialog.body.querySelector('#mcp-args').value='[1]';dialog.foot.querySelector('[data-save]').click();assert.equal(posts.length,1);assert.match(toasts.at(-1)[0],/array of strings/);
+dom.window.close();console.log('MCP argument editor preserves structured arguments and rejects invalid values.');

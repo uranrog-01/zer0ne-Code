@@ -1,0 +1,11 @@
+'use strict';
+const assert = require('assert/strict');
+const { regions } = require('../app/panel-glass');
+const viewport = {width:1000,height:800};
+assert.deepEqual(regions({viewport,panels:[{id:'sidebar',x:0,y:40,width:260,height:760},{id:'auxiliary',x:720,y:40,width:280,height:760}]}),[[0,.05,.26,.95],[.72,.05,.28,.95]]);
+assert.deepEqual(regions({viewport,panels:[]}),[null,null]);
+assert.deepEqual(regions({viewport,panels:[{id:'other',x:0,y:0,width:1000,height:800}]}),[null,null]);
+assert.deepEqual(regions({viewport,panels:[{id:'sidebar',x:NaN,y:0,width:30,height:30},{id:'auxiliary',x:950,y:750,width:200,height:200}]}),[null,[.95,.9375,.05,.0625]]);
+assert.deepEqual(regions({viewport:{width:0,height:800},panels:[]}),[null,null]);
+assert.deepEqual(regions({viewport,panels:[{id:'sidebar',x:0,y:0,width:-20,height:40}]}),[null,null]);
+console.log('Panel glass: only named panel regions, bounded geometry, hidden panels and invalid input passed.');

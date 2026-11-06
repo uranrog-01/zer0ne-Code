@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "startupMs": 20000,
+  "rendererP95Ms": 2500,
+  "projectColdSwitchMs": 15000,
+  "projectWarmSwitchMs": 5000,
+  "ptyReadyMs": 30000,
+  "terminalBurstMs": 2500,
+  "storageWriteMs": 2500,
+  "heapGrowthMb": 128
+}

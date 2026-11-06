@@ -1,0 +1,11 @@
+{
+	"name": "zer0ne-coding",
+	"displayName": "zer0ne coding",
+	"description": "The coding agent engine of zer0ne Code: the agent loop, tools, providers and its UI (media/).",
+	"version": "0.33.5",
+	"bugs": {
+		"url": "https://github.com/uranrog-01/zer0ne-Code/issues"
+	},
+	"license": "MIT",
+	"private": true
+}

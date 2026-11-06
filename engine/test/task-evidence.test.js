@@ -1,0 +1,125 @@
+'use strict';
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { createHash } = require('node:crypto');
+const { createShim, install } = require('./vscode-shim');
+const base = fs.mkdtempSync(path.join(os.tmpdir(), 'zc-evidence-'));
+const project = path.join(base, 'project'), storage = path.join(base, 'storage');
+fs.mkdirSync(project); fs.mkdirSync(storage);
+const shim = createShim({ workspace: project, dataDir: storage }); install(shim.vscode);
+const out = process.env.ZER0NE_TEST_ENGINE_OUT || path.resolve(__dirname, '../out');
+const { beginExecution, readExecutions } = require(path.join(out, 'core/executionJournal'));
+const { recordEvidence, refreshEvidence, evidenceStatus } = require(path.join(out, 'host/taskEvidence'));
+const { DEFAULT_SETTINGS, ProviderStore } = require(path.join(out, 'providerStore'));
+const { ToolExecutor } = require(path.join(out, 'host/toolExecutor'));
+const { projectFingerprint, checkConfiguration } = require(path.join(out, 'tools/projectChecks'));
+const { agentTools } = require(path.join(out, 'host/subagentRuntime'));
+const { AgentRegistry, TurnAgents } = require(path.join(out, 'host/turnAgents'));
+const { ToolScheduler } = require(path.join(out, 'core/toolScheduler'));
+
+(async () => {
+  try {
+    const settings = { ...DEFAULT_SETTINGS, commandTool: true, projectVerification: true, sandbox: 'off', denyPaths: '' };
+    fs.writeFileSync(path.join(project, 'check.cjs'), 'process.stdout.write("checked");');
+    fs.writeFileSync(path.join(project, 'package.json'), JSON.stringify({ name: 'evidence-fixture', scripts: { check: 'node check.cjs' } }));
+    const executor = new ToolExecutor({ scheduleState() {}, mcp: {}, plugins: {} });
+    let receipts = [], approvals = 0;
+    const ctx = { settings, signal: new AbortController().signal, vision: false, sessionId: 's1', taskId: 'u1', storageDir: storage,
+      requestApproval: async () => { approvals++; return { approved: true, auto: false, finish() {} }; },
+      onFeatureReport: report => { receipts = recordEvidence(receipts, report, 's1', 'u1'); } };
+    const call = { id: 'real-check', name: 'project_verify', arguments: '{}' };
+    const result = await executor.runWithGates(call, ctx, [], {}, settings);
+    assert.equal(result.error, false, result.api);
+    assert.equal(approvals, 1);
+    assert.equal(evidenceStatus(receipts), 'passed');
+    assert.equal(receipts[0].sessionId, 's1'); assert.equal(receipts[0].taskId, 'u1');
+    assert.equal(receipts[0].stages[0].code, 0); assert.ok(!('output' in receipts[0].stages[0]));
+    assert.equal(readExecutions(storage, 's1', 'u1')[0].events.at(-1).outcome, 'completed');
+    assert.equal(readExecutions(storage, 's1', 'u1')[0].events.find(e => e.kind === 'approval').approved, true);
+    await assert.rejects(new ToolExecutor({ scheduleState() {}, mcp: {}, plugins: {} }).runWithGates(call, ctx, [], {}, settings), /already recorded/);
+    assert.equal(approvals, 1, 'a new executor cannot repeat an existing call');
+    assert.deepEqual(readExecutions(storage, 'other-chat', 'u1'), []);
+    assert.deepEqual(readExecutions(storage, 's1', 'other-task'), []);
+
+    await refreshEvidence(receipts, settings); assert.equal(evidenceStatus(receipts), 'passed');
+    fs.writeFileSync(path.join(project, 'check.cjs'), 'process.exitCode=7;');
+    await refreshEvidence(receipts, settings); assert.equal(evidenceStatus(receipts), 'stale');
+    const failed = await executor.runWithGates({ ...call, id: 'failed-check' }, ctx, [], {}, settings);
+    assert.equal(failed.error, true); assert.equal(receipts.at(-1).stages[0].code, 7);
+    assert.equal(evidenceStatus(receipts), 'failed', 'a later check of the same scope replaces stale evidence');
+    const success = { ...receipts.at(-1), id: 'success', status: 'passed', stages: [{ name: 'test', command: 'npm test', status: 'passed', code: 0, durationMs: 2 }] };
+    assert.equal(evidenceStatus([{ ...success, scope: 'Other checks' }, receipts.at(-1)]), 'failed', 'unrelated passing checks cannot hide a failed check');
+    assert.equal(evidenceStatus([{ ...success, stages: [] }]), 'failed');
+    assert.equal(evidenceStatus([{ ...success, stages: [{ ...success.stages[0], code: undefined }] }]), 'failed');
+    assert.equal(evidenceStatus([{ ...success, finishedAt: undefined }]), 'failed');
+    assert.equal(evidenceStatus([]), 'not-run');
+    const masked = recordEvidence([], { ...success, scope: 'APP_PASSWORD=private-value', stages: [{ ...success.stages[0], command: 'APP_PASSWORD=private-value npm test' }] }, 's1', 'u1');
+    assert.ok(!JSON.stringify(masked).includes('private-value'), 'receipts mask credentials in custom commands');
+    const configChanged = [JSON.parse(JSON.stringify(success))];
+    await refreshEvidence(configChanged, { ...settings, sandboxNetwork: !settings.sandboxNetwork });
+    assert.equal(evidenceStatus(configChanged), 'stale');
+
+    const refused = await executor.runWithGates({ id: 'denied', name: 'write_file', arguments: '{"path":"secret.txt","content":"password=private-value"}' }, { ...ctx, allowedTools: new Set(['read_file']) }, [], {}, settings);
+    assert.equal(refused.error, true); assert.ok(!fs.existsSync(path.join(project, 'secret.txt')));
+    assert.equal(readExecutions(storage, 's1', 'u1').find(r => r.callId === 'denied').events.at(-1).outcome, 'refused');
+    const declined = await executor.runWithGates({ id: 'declined', name: 'write_file', arguments: '{"path":"declined.txt","content":"data"}' }, { ...ctx, requestApproval: async () => ({ approved: false, finish() {} }) }, [], {}, settings);
+    assert.equal(declined.error, true); assert.ok(!fs.existsSync(path.join(project, 'declined.txt')));
+    assert.equal(readExecutions(storage, 's1', 'u1').find(r => r.callId === 'declined').events.at(-1).outcome, 'refused');
+    const identity = { sessionId: 's1', taskId: 'u1', callId: 'interrupted', tool: 'run_command' };
+    beginExecution(storage, identity, 'password=private-value');
+    assert.throws(() => beginExecution(storage, identity, 'different arguments'), /already recorded/);
+    const pending = readExecutions(storage, 's1', 'u1').find(r => r.callId === 'interrupted');
+    assert.equal(pending.events.length, 1, 'no outcome is invented after an interruption');
+    const hash = value => createHash('sha256').update(value).digest('hex');
+	const recordFile = path.join(storage, 'execution-journal', hash('s1\0u1').slice(0,24), hash('interrupted').slice(0,24) + '.jsonl');
+    fs.appendFileSync(recordFile, '{"kind":"finished","outcome":"completed"');
+    assert.equal(readExecutions(storage, 's1', 'u1').find(r => r.callId === 'interrupted').events.length, 1, 'a torn row is not a success');
+    const brokenHeader = { ...identity, callId: 'broken-header' }; beginExecution(storage, brokenHeader, '{}');
+    fs.writeFileSync(path.join(path.dirname(recordFile), hash('broken-header').slice(0,24) + '.jsonl'), JSON.stringify({ ...brokenHeader, kind: 'requested', argumentHash: hash('{}'), at: 'invalid' }) + '\n');
+    assert.ok(!readExecutions(storage, 's1', 'u1').some(r => r.callId === 'broken-header'), 'a damaged header cannot hide valid records');
+    for (const file of fs.readdirSync(path.dirname(recordFile))) assert.ok(!fs.readFileSync(path.join(path.dirname(recordFile), file), 'utf8').includes('private-value'));
+    const abort = new AbortController(); abort.abort();
+    await assert.rejects(executor.runWithGates({ id: 'cancelled', name: 'read_file', arguments: '{}' }, { ...ctx, signal: abort.signal }, [], {}, settings));
+    assert.equal(readExecutions(storage, 's1', 'u1').find(r => r.callId === 'cancelled').events.at(-1).outcome, 'unknown');
+    const unavailableStorage = path.join(base, 'storage-file'); fs.writeFileSync(unavailableStorage, 'not a directory');
+    await assert.rejects(executor.runWithGates({ id: 'unrecordable', name: 'write_file', arguments: '{"path":"unrecorded.txt","content":"data"}' }, { ...ctx, storageDir: unavailableStorage }, [], {}, settings));
+    assert.ok(!fs.existsSync(path.join(project, 'unrecorded.txt')), 'failure to save the request prevents execution');
+
+    const defs = ['read_file', 'write_file', 'run_command', 'mcp__server__send'].map(name => ({ name }));
+    assert.deepEqual(agentTools(defs, { tools: ['*'], disallowedTools: ['mcp__*'] }, new Set(['read_file', 'mcp__server__send']), ['read_file', 'write_file']).map(d => d.name), ['read_file']);
+    assert.deepEqual(agentTools(defs, undefined, undefined, []), []);
+    const data = new Map(), memento = { get: (k, fallback) => data.has(k) ? data.get(k) : fallback, update: async (k, v) => data.set(k, v) };
+    const context = { globalState: memento, workspaceState: memento, globalStorageUri: shim.vscode.Uri.file(storage), secrets: { get: async () => 'fixture', store: async () => {}, delete: async () => {} } };
+    const store = new ProviderStore(context);
+    await store.updateSettings({ skills: false, includeAgentsMd: false, hybrid: false, subagents: true });
+    const provider = await store.add({ name: 'Fixture', baseUrl: 'https://fixture.invalid', apiFormat: 'openai', models: [{ id: 'fixture' }] });
+    const registry = new AgentRegistry(); registry.configure(path.join(storage, 'agents.json'));
+    const persona = { name: 'Scoped', prompt: '', canWrite: false, tools: ['Read'], source: 'fixture', description: 'fixture' };
+    const services = { store, registry, storageDir: storage, extensionDir: path.join(__dirname, '..'), plugins: { agents: () => [persona] }, mcp: {}, browser: {}, skills: {}, writers: {}, hooks: () => [], hookBase: {}, scheduleState() {}, tools: { scheduler: new ToolScheduler() }, callModel: async () => ({ text: 'Research complete', toolCalls: [] }) };
+    const agents = new TurnAgents(services, { sessionId: 's1', convo: [], provider, model: provider.models[0], apiKey: 'fixture', settings: store.getSettings(), signal: new AbortController().signal });
+    const parent = { settings: store.getSettings(), signal: new AbortController().signal, sessionId: 's1', requestApproval: async () => ({ approved: false, finish() {} }) };
+    agents.attach(parent); await parent.runSubagent('Scoped research', 'Read', 'Scoped');
+    const worker = registry.list()[0]; assert.deepEqual(worker.allowedTools, ['read_file']);
+    persona.tools = ['*']; persona.canWrite = true;
+    await parent.sendToAgent(worker.id, 'Continue research');
+    assert.equal(worker.readOnly, true); assert.deepEqual(worker.allowedTools, ['read_file'], 'changing a persona cannot expand a resumed worker');
+    registry.checkpoint();
+    const restored = new AgentRegistry(); restored.configure(path.join(storage, 'agents.json'));
+    assert.deepEqual(restored.get(worker.id).allowedTools, ['read_file']); assert.equal(restored.get(worker.id).readOnly, true);
+
+    const { ChatController } = require(path.join(out, 'chatController'));
+    const sessionId = await store.currentSessionId();
+    const turn = { id: 'owned-turn', role: 'user', content: 'Check', turn: { startedAt: Date.now(), outcome: 'completed', verification: [{ ...success, sessionId, taskId: 'owned-turn', fingerprint: await projectFingerprint(project), configuration: checkConfiguration(settings) }] } };
+    const controller = Object.assign(Object.create(ChatController.prototype), { store, context, sessionId, messages: [turn], features: [], agentRuns: registry, sendState: async () => {} });
+    const posts = [], surface = { kind: 'chat', post: msg => posts.push(msg) };
+    await assert.rejects(controller.dispatch(surface, { type: 'taskEvidence', sessionId: 'other-chat', id: turn.id }), /no longer active/);
+    await assert.rejects(controller.dispatch(surface, { type: 'taskEvidence', sessionId, id: 'other-turn' }), /task in this chat/);
+    await controller.dispatch(surface, { type: 'taskEvidence', sessionId, id: turn.id });
+    assert.equal(posts.at(-1).type, 'taskEvidenceResult'); assert.equal(posts.at(-1).id, turn.id);
+
+    agents.end();
+    console.log('Task evidence passed: real checks, stale snapshots, scoped receipts, journal durability/refusals/duplicate prevention, persisted worker ceilings and authorized history.');
+  } finally { fs.rmSync(base, { recursive: true, force: true }); }
+})().catch(error => { console.error(error); process.exitCode = 1; });

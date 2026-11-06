@@ -1,0 +1,32 @@
+'use strict';
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const os = require('node:os');
+const { createShim, install } = require('../engine/vscode-shim');
+const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zer0ne-panel-test-'));
+install(createShim({ dataDir }).vscode);
+const { ProviderStore, sessionActivity } = require('../engine/out/providerStore');
+const turn = (outcome, endedAt = 200) => [{ id: 'prompt', role: 'user', content: 'Work', turn: { startedAt: 100, endedAt, outcome } }];
+async function run() {
+	assert.deepEqual(sessionActivity(turn('completed'), 100), { completedAt: 200, outcome: 'completed', unread: true });
+	assert.equal(sessionActivity(turn('stopped'), 100).unread, false, 'cancellation is not an unread successful result');
+	assert.equal(sessionActivity(turn('failed'), 100).unread, true);
+	assert.equal(sessionActivity(turn('completed'), 200).unread, false);
+	assert.equal(sessionActivity(turn(undefined)).unread, false, 'legacy chats do not all become unread on upgrade');
+	assert.deepEqual(sessionActivity([{ id: 'new', role: 'user', content: 'Work', turn: { startedAt: 300 } }]), {}, 'a live turn is not reported complete');
+	const values = { 'aiChat.sessions': [{ id: 's', title: 'Saved', updatedAt: 100, lastReadAt: 100, messages: turn('completed') }] };
+	const store = new ProviderStore({ globalState: { get: (key, fallback) => values[key] ?? fallback, update: async (key, value) => { values[key] = value; } } });
+	await store.markSessionRead('s', 150);
+	assert.equal((await store.listSessions())[0].unread, true, 'a stale acknowledgement cannot consume a later completion');
+	await store.markSessionRead('s', Number.POSITIVE_INFINITY);
+	assert.equal((await store.listSessions())[0].unread, true);
+	await store.markSessionRead('s', 10000);
+	assert.equal(values['aiChat.sessions'][0].lastReadAt, 200, 'future acknowledgements clamp to the real completed turn');
+	assert.equal(values['aiChat.sessions'][0].updatedAt, 100, 'reading does not reorder chat history');
+	assert.equal((await store.listSessions())[0].unread, false);
+	await store.markSessionRead('gone', 1000);
+	assert.equal(values['aiChat.sessions'].length, 1, 'read acknowledgements cannot resurrect deleted chats');
+	console.log('panel-status tests passed');
+}
+run().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => fs.rmSync(dataDir, { recursive: true, force: true }));

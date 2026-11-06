@@ -1,0 +1,57 @@
+/* The Quick window: one floating glass prompt; the window itself is transparent around it. */
+:root {
+	color-scheme: dark;
+	--q-ink: #f4f4f5;
+	--q-text: rgba(244, 244, 245, 0.66);
+	--q-muted: rgba(244, 244, 245, 0.42);
+	--q-line: rgba(255, 255, 255, 0.1);
+	--q-accent: #6ea8ff;
+	--q-run: #4ade80;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; background: transparent; overflow: hidden; }
+body { display: grid; place-items: start center; padding: 14px 18px 22px; font: 14px/20px "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif; color: var(--q-ink); -webkit-font-smoothing: antialiased; }
+.quick {
+	position: relative; display: grid; gap: 10px; width: 100%; padding: 14px 14px 10px 16px;
+	border: 1px solid var(--q-line); border-radius: 18px;
+	background: linear-gradient(180deg, rgba(36, 36, 42, 0.94), rgba(22, 22, 26, 0.96));
+	box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4), 0 22px 48px -18px rgba(0, 0, 0, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+	animation: quick-in 280ms cubic-bezier(0.34, 1.45, 0.64, 1) both;
+}
+/* The panel plays its exit when the shell hides the window. */
+.quick.out { animation: none; opacity: 0; transform: translateY(10px) scale(0.96); transition: opacity 140ms ease, transform 140ms ease; }
+.quick::before { content: ""; position: absolute; inset: -1px; border-radius: inherit; padding: 1px; background: linear-gradient(120deg, rgba(110, 168, 255, 0.55), rgba(176, 77, 255, 0.25) 40%, transparent 70%); background-size: 220% 100%; -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none; opacity: 0; transition: opacity 240ms ease; }
+/* One gradient sweep across the frame while the prompt has focus; it does not loop. */
+.quick:focus-within::before { opacity: 1; animation: quick-sweep 1100ms ease 1 both; }
+.quick::after { content: ""; position: absolute; inset: -1px; border-radius: inherit; pointer-events: none; opacity: 0; background: radial-gradient(120% 90% at 50% 0%, rgba(110, 168, 255, 0.28), transparent 62%); }
+/* One glow when a prompt is accepted. */
+.quick.sent::after { animation: quick-glow 420ms ease 1 both; }
+.quick-row { display: flex; align-items: flex-start; gap: 12px; }
+/* The row shakes once when a send fails; the panel's own animation stays untouched. */
+.quick.error .quick-row { animation: quick-shake 260ms ease; }
+.quick-logo { flex: none; margin-top: 4px; opacity: 0.9; }
+textarea { flex: 1; min-height: 28px; max-height: 84px; padding: 4px 0; border: 0; outline: 0; resize: none; background: transparent; font: inherit; font-size: 16px; line-height: 24px; color: var(--q-ink); caret-color: var(--q-accent); }
+textarea::placeholder { color: var(--q-muted); }
+textarea::selection { background: rgba(110, 168, 255, 0.35); }
+.quick-send { display: grid; flex: none; place-items: center; width: 32px; height: 32px; margin: 0; padding: 0; border: 0; border-radius: 50%; background: var(--q-ink); color: #111; cursor: pointer; transition: transform 160ms ease, opacity 160ms ease, background-color 200ms ease, color 200ms ease; }
+.quick-send:disabled { opacity: 0.25; cursor: default; }
+.quick-send:not(:disabled):hover { transform: translateY(-1px); }
+.quick-send:focus-visible { outline: 2px solid var(--q-accent); outline-offset: 2px; }
+/* Sent: the button pops into a green check. */
+.quick-send.done { opacity: 1; background: var(--q-run); color: #0b3d1d; transform: none; animation: quick-pop 240ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+.quick-foot { display: flex; align-items: center; gap: 10px; min-width: 0; padding-top: 8px; border-top: 1px solid var(--q-line); font-size: 12px; color: var(--q-muted); }
+.quick-target { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 40%; padding: 2px 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.06); color: var(--q-text); white-space: nowrap; }
+.quick-target > span { overflow: hidden; text-overflow: ellipsis; }
+.quick-target i { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--q-muted); }
+.quick-target.on i { background: var(--q-run); box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.16); }
+.quick-note { flex: 1; min-width: 0; overflow: hidden; color: #ffa057; white-space: nowrap; text-overflow: ellipsis; }
+.quick-keys { flex: none; white-space: nowrap; }
+kbd { display: inline-block; margin: 0 2px 0 6px; padding: 0 5px; border: 1px solid var(--q-line); border-bottom-width: 2px; border-radius: 5px; font-family: inherit; font-size: 11px; line-height: 16px; color: var(--q-text); }
+@keyframes quick-in { from { opacity: 0; transform: translateY(14px) scale(0.92); } }
+@keyframes quick-sweep { from { background-position: 100% 0; } to { background-position: 0 0; } }
+@keyframes quick-glow { from { opacity: 0; } 30% { opacity: 1; } to { opacity: 0; } }
+@keyframes quick-pop { from { transform: scale(0.55); } }
+@keyframes quick-shake { 20% { transform: translateX(-4px); } 40% { transform: translateX(3px); } 60% { transform: translateX(-2px); } 80% { transform: translateX(1px); } }
+@media (prefers-reduced-motion: reduce) {
+	.quick, .quick-send, .quick::before, .quick::after, .quick.error .quick-row { animation: none !important; transition: none; opacity: 1; transform: none; }
+}

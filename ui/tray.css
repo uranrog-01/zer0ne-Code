@@ -1,0 +1,67 @@
+/* The tray menu: one floating glass panel; the window itself is transparent around it. */
+:root {
+	color-scheme: dark;
+	--t-ink: #f4f4f5;
+	--t-text: rgba(244, 244, 245, 0.68);
+	--t-muted: rgba(244, 244, 245, 0.4);
+	--t-line: rgba(255, 255, 255, 0.1);
+	--t-panel: rgba(255, 255, 255, 0.06);
+	--t-accent: #6ea8ff;
+	--t-fail: #ff7b7b;
+}
+body.light {
+	color-scheme: light;
+	--t-ink: #1c1c22;
+	--t-text: rgba(28, 28, 34, 0.72);
+	--t-muted: rgba(28, 28, 34, 0.45);
+	--t-line: rgba(0, 0, 0, 0.09);
+	--t-panel: rgba(0, 0, 0, 0.05);
+	--t-accent: #2f6bff;
+	--t-fail: #d53838;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; background: transparent; overflow: hidden; }
+body { display: grid; align-items: end; padding: 8px 10px 12px; font: 13px/18px "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif; color: var(--t-ink); -webkit-font-smoothing: antialiased; }
+body.below { align-items: start; }
+
+.panel {
+	position: relative; display: flex; flex-direction: column; width: 100%; max-height: 100%;
+	padding: 4px 6px 6px; border: 1px solid var(--t-line); border-radius: 16px;
+	background: linear-gradient(180deg, rgba(36, 36, 42, 0.94), rgba(22, 22, 26, 0.96));
+	box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 22px 48px -18px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+	opacity: 0; transform: translateY(6px) scale(0.985);
+}
+body.below .panel { transform: translateY(-6px) scale(0.985); }
+body.light .panel { background: linear-gradient(180deg, rgba(250, 250, 253, 0.96), rgba(242, 242, 248, 0.97)); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08), 0 22px 44px -18px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.7); }
+.panel.in { opacity: 1; transform: none; transition: opacity 180ms cubic-bezier(0.32, 0.72, 0.24, 1), transform 180ms cubic-bezier(0.32, 0.72, 0.24, 1); }
+
+.head { display: flex; align-items: center; gap: 9px; padding: 7px 10px 5px; }
+.head-logo { flex: none; opacity: 0.92; }
+.head-name { font-weight: 600; letter-spacing: 0.1px; }
+.head-version { margin-left: auto; font-size: 11px; color: var(--t-muted); font-variant-numeric: tabular-nums; }
+.head-status { display: flex; align-items: center; gap: 7px; margin: 0 10px; padding-bottom: 8px; border-bottom: 1px solid var(--t-line); font-size: 12px; color: var(--t-text); }
+.head-status i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--t-muted); }
+.head-status.busy i { background: var(--t-accent); box-shadow: 0 0 0 3px rgba(110, 168, 255, 0.16); }
+
+.scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 2px; }
+.section { padding: 4px 0 5px; }
+.section + .section { border-top: 1px solid var(--t-line); margin-top: 2px; }
+
+.row { display: flex; align-items: center; gap: 9px; width: 100%; padding: 7px 10px; border: 0; border-radius: 9px; background: transparent; font: inherit; text-align: left; color: var(--t-ink); cursor: pointer; }
+.row:hover:not(:disabled) { background: var(--t-panel); }
+.row:focus-visible { outline: 2px solid var(--t-accent); outline-offset: -2px; }
+.row:disabled { color: var(--t-muted); cursor: default; }
+.row-ic { flex: none; display: grid; place-items: center; width: 16px; height: 16px; color: var(--t-text); }
+.row-label { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.row-hint { flex: none; display: inline-flex; align-items: center; font-size: 10.5px; color: var(--t-muted); }
+.row-hint .plus { font-style: normal; margin: 0 1px; }
+kbd { display: inline-block; padding: 0 4px; border: 1px solid var(--t-line); border-bottom-width: 2px; border-radius: 4px; font-family: inherit; font-size: 10.5px; line-height: 14px; color: var(--t-text); }
+.row.danger { color: var(--t-fail); }
+.row.danger .row-ic { color: var(--t-fail); }
+.row.danger:hover:not(:disabled) { background: rgba(255, 123, 123, 0.09); }
+
+::-webkit-scrollbar { width: 10px; }
+::-webkit-scrollbar-thumb { border: 3px solid transparent; border-radius: 99px; background: var(--t-muted); background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: var(--t-text); background-clip: content-box; }
+
+@media (prefers-reduced-motion: reduce) { .panel.in { transition: none; animation: none; opacity: 1; transform: none; } }

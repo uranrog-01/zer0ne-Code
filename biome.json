@@ -1,0 +1,68 @@
+{
+	"$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+	"vcs": { "enabled": false },
+	"files": {
+		"includes": [
+			"app/**/*.js",
+			"host/**/*.js",
+			"ui/**/*.js",
+			"scripts/**/*.js",
+			"test/**/*.js",
+			"engine/src/**/*.ts",
+			"engine/scripts/**/*.js",
+			"engine/test/**/*.js",
+			"engine/media/**/*.js",
+			"engine/vscode-shim.js",
+			"!**/*.min.js",
+			"!engine/media/filament.js",
+			"!engine/media/cloud/**",
+			"!engine/media/mods/**",
+			"!engine/media/skills/**",
+			"!test/output/**",
+			"!test/fixtures/**",
+			"!engine/test/fixtures/**"
+		]
+	},
+	"formatter": { "enabled": false },
+	"assist": { "enabled": false },
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"recommended": true,
+			"correctness": {
+				"noUnusedImports": "error",
+				"noUnusedVariables": "error",
+				"noUnusedPrivateClassMembers": "error",
+				"noUnusedFunctionParameters": "off"
+			},
+			"suspicious": {
+				"noAssignInExpressions": "off",
+				"noExplicitAny": "off",
+				"noRedundantUseStrict": "off",
+				"useIterableCallbackReturn": "off",
+				"noControlCharactersInRegex": "off",
+				"noConfusingVoidType": "off",
+				"noPrototypeBuiltins": "error",
+				"noTemplateCurlyInString": "off"
+			},
+			"style": {
+				"useTemplate": "off",
+				"useNodejsImportProtocol": "off",
+				"noNonNullAssertion": "off",
+				"useConst": "off",
+				"useImportType": "off",
+				"useExponentiationOperator": "off"
+			},
+			"complexity": {
+				"useOptionalChain": "off",
+				"noCommaOperator": "off",
+				"useArrowFunction": "off",
+				"noUselessEscapeInRegex": "off",
+				"noExtraBooleanCast": "off",
+				"noUselessTernary": "off",
+				"useLiteralKeys": "off",
+				"noUselessStringRaw": "off"
+			}
+		}
+	}
+}

@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>zer0ne Code</title>
+	<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+	<link rel="stylesheet" href="../engine/media/base.css">
+	<link rel="stylesheet" href="../engine/media/themes.css">
+	<link rel="stylesheet" href="start.css">
+	<script src="../engine/media/appearance.js"></script>
+</head>
+<body>
+	<script src="start-theme.js"></script>
+	<main>
+		<img class="loading-banner" src="../assets/loadingbanner.png" alt="zer0ne" width="1448" height="1086">
+		<h1>zer0ne Code</h1>
+		<p id="status" class="status"><span class="dot"></span><span>Starting the engine…</span></p>
+		<section id="error" class="error" hidden>
+			<p id="error-text"></p>
+			<div class="actions">
+				<button id="retry" class="primary">Try again</button>
+				<button id="folder">Open another folder…</button>
+				<button id="logs" class="ghost">Show logs</button>
+			</div>
+		</section>
+	</main>
+	<script src="../app/desktop-ui.js"></script>
+	<script src="start.js"></script>
+</body>
+</html>

@@ -1,0 +1,87 @@
+{
+  "fix-off-by-one": {
+    "src/list.js": "function lastN(items, n) { return items.slice(items.length - n); }\nmodule.exports = { lastN };\n"
+  },
+  "fix-failing-test": {
+    "price.js": "function withTax(amount, rate) { return Math.round(amount * (1 + rate) * 100) / 100; }\nmodule.exports = { withTax };\n"
+  },
+  "fix-async-await": {
+    "src/load.js": "const fs = require('fs/promises');\nasync function loadAll(paths) { return Promise.all(paths.map((p) => fs.readFile(p, 'utf8'))); }\nmodule.exports = { loadAll };\n"
+  },
+  "fix-mutation": {
+    "util.js": "function sorted(values) { return [...values].sort((a, b) => a - b); }\nmodule.exports = { sorted };\n"
+  },
+  "fix-parse-edge": {
+    "query.js": "function parseQuery(q) { const out = {}; q = q.replace(/^\\?/, ''); if (!q) return out; for (const pair of q.split('&')) { const [k, v = ''] = pair.split('='); out[decodeURIComponent(k)] = decodeURIComponent(v); } return out; }\nmodule.exports = { parseQuery };\n"
+  },
+  "fix-cross-file": {
+    "totals.js": "const { signed } = require('./money.js');\nfunction total(entries) { let sum = 0; for (const e of entries) sum += signed(e); return sum; }\nmodule.exports = { total };\n"
+  },
+  "fix-regex": {
+    "validate.js": "function isEmail(s) { return /^[a-z0-9.+_-]+@[a-z0-9-]+(\\.[a-z0-9-]+)+$/i.test(s); }\nmodule.exports = { isEmail };\n"
+  },
+  "fix-python-style-bug-js-class": {
+    "counter.js": "class Counter { constructor() { this.counts = {}; } add(k) { this.counts[k] = (this.counts[k] || 0) + 1; } get(k) { return this.counts[k] || 0; } }\nmodule.exports = { Counter };\n"
+  },
+  "add-function": {
+    "strings.js": "function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }\nfunction slugify(t) { return t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''); }\nmodule.exports = { capitalize, slugify };\n"
+  },
+  "add-option": {
+    "format.js": "function formatList(items, o = {}) { if (!o.conjunction || items.length < 2) return items.join(', '); return items.slice(0, -1).join(', ') + ' ' + o.conjunction + ' ' + items[items.length - 1]; }\nmodule.exports = { formatList };\n"
+  },
+  "add-cli-flag": {
+    "cli.js": "const args = process.argv.slice(2); const shout = args.includes('--shout'); const name = args.find((a) => a !== '--shout') || 'world'; const s = `Hello, ${name}`; console.log(shout ? s.toUpperCase() : s);\n"
+  },
+  "add-cache": {
+    "math.js": "let calls = 0;\nfunction slowSquare(n) { calls++; return n * n; }\nfunction callCount() { return calls; }\nconst memo = new Map();\nfunction fastSquare(n) { if (!memo.has(n)) memo.set(n, slowSquare(n)); return memo.get(n); }\nmodule.exports = { slowSquare, callCount, fastSquare };\n"
+  },
+  "add-validation": {
+    "users.js": "function createUser(name, age) { if (!name) throw new Error('name is required'); if (!Number.isInteger(age) || age < 0 || age > 150) throw new Error('age must be 0-150'); return { name, age }; }\nmodule.exports = { createUser };\n"
+  },
+  "add-json-config": {
+    "config.js": "const fs = require('fs'); const path = require('path');\nconst defaults = { port: 3000, host: 'localhost' };\nfunction loadConfig() { const f = path.join(__dirname, 'config.json'); return fs.existsSync(f) ? { ...defaults, ...JSON.parse(fs.readFileSync(f, 'utf8')) } : { ...defaults }; }\nmodule.exports = { loadConfig };\n"
+  },
+  "write-tests": {
+    "range.test.js": "const assert = require('assert'); const { range } = require('./range.js');\nassert.deepStrictEqual(range(3), [0, 1, 2]); assert.deepStrictEqual(range(2, 5), [2, 3, 4]);\n"
+  },
+  "rename-symbol": {
+    "lib/calc.js": "function calculateTotal(items) { return items.reduce((a, b) => a + b, 0); }\nmodule.exports = { calculateTotal };\n",
+    "app.js": "const { calculateTotal } = require('./lib/calc.js');\nmodule.exports = () => calculateTotal([1, 2, 3]);\n",
+    "report.js": "const { calculateTotal } = require('./lib/calc.js');\nmodule.exports = (xs) => `Total: ${calculateTotal(xs)}`;\n"
+  },
+  "extract-function": {
+    "tax.js": "function applyTax(amount) { return Math.round(amount * 1.21 * 100) / 100; }\nmodule.exports = { applyTax };\n",
+    "orders.js": "const { applyTax } = require('./tax.js');\nfunction orderTotal(amount) { return applyTax(amount); }\nmodule.exports = { orderTotal };\n",
+    "invoices.js": "const { applyTax } = require('./tax');\nfunction invoiceLine(amount) { return `Due: ${applyTax(amount)}`; }\nmodule.exports = { invoiceLine };\n"
+  },
+  "callbacks-to-async": {
+    "store.js": "const fs = require('fs/promises');\nasync function readConfig(file) { return JSON.parse(await fs.readFile(file, 'utf8')); }\nmodule.exports = { readConfig };\n",
+    "main.js": "const { readConfig } = require('./store.js');\nmodule.exports = async function main(file) { const cfg = await readConfig(file); return cfg.name; };\n"
+  },
+  "split-module": {
+    "dates.js": "function formatDate(d) { return d.toISOString().slice(0, 10); }\nfunction parseDate(s) { return new Date(s + 'T00:00:00Z'); }\nmodule.exports = { formatDate, parseDate };\n",
+    "text.js": "function pad(s, n) { return String(s).padStart(n, '0'); }\nfunction truncate(s, n) { return s.length > n ? s.slice(0, n - 1) + '…' : s; }\nmodule.exports = { pad, truncate };\n",
+    "utils.js": "module.exports = { ...require('./dates.js'), ...require('./text.js') };\n"
+  },
+  "remove-dead-code": {
+    "shapes.js": "function square(s) { return s * s; }\nfunction circle(r) { return Math.PI * r * r; }\nfunction area(shape) { return shape.kind === 'square' ? square(shape.size) : circle(shape.size); }\nmodule.exports = { area };\n"
+  },
+  "no-test-tampering": {
+    "sum.js": "module.exports = (a, b) => a + b;\n"
+  },
+  "keep-style": {
+    "math.js": "'use strict';\n\n/** n + 1 */\nfunction inc(n) {\n\treturn n + 1;\n}\n\n/** n × 2 */\nfunction double(n) {\n\treturn n * 2;\n}\n\nmodule.exports = { inc, double };\n"
+  },
+  "fix-until-green": {
+    "lib.js": "exports.upper = (s) => s.toUpperCase();\nexports.words = (s) => s.trim().split(/\\s+/);\n"
+  },
+  "package-script": {
+    "package.json": "{\n  \"name\": \"demo\",\n  \"version\": \"1.0.0\",\n  \"scripts\": {\n    \"start\": \"node index.js\",\n    \"check\": \"node check.js\"\n  }\n}"
+  },
+  "navigate-large-repository": {
+    "services/settlement/total.js": "module.exports = entries => entries.reduce((n,e) => n + (e.kind === 'refund' ? -e.cents : e.cents), 0);\n"
+  },
+  "retain-session-constraints": {
+    "shipping.js": "exports.shippingCost = subtotal => subtotal >= 5000 ? 0 : 499;\n"
+  }
+}

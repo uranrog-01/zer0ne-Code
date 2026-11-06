@@ -1,0 +1,7 @@
+* text=auto eol=lf
+*.bat text eol=crlf
+# Pinned by checksum: keep the vendored files byte-exact.
+engine/media/terminal/xterm.min.js -text
+engine/media/terminal/xterm.css -text
+engine/media/terminal/LICENSE.xterm -text
+engine/media/mermaid.min.js -text

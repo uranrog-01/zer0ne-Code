@@ -1,0 +1,117 @@
+{
+	"cases": [
+		{
+			"id": "find-definition-deep",
+			"category": "explore",
+			"prompt": "Which file defines the class RateLimiter? Reply with just its path.",
+			"files": {
+				"src/index.js": "module.exports = require('./net');\n",
+				"src/net/index.js": "module.exports = { ...require('./http'), ...require('./limits/window') };\n",
+				"src/net/http.js": "// uses RateLimiter from limits\nmodule.exports = { get() {} };\n",
+				"src/net/limits/window.js": "class RateLimiter { constructor(n) { this.n = n; } }\nmodule.exports = { RateLimiter };\n",
+				"docs/notes.md": "RateLimiter is described here but not defined.\n"
+			},
+			"maxSteps": 16,
+			"expect": [
+				{
+					"kind": "reply",
+					"matches": "src[\\\\/]net[\\\\/]limits[\\\\/]window\\.js"
+				}
+			]
+		},
+		{
+			"id": "count-usages",
+			"category": "explore",
+			"prompt": "How many times is the function logEvent called across the project (not counting its definition)? Reply with just the number.",
+			"files": {
+				"log.js": "function logEvent(e) { console.log(e); }\nmodule.exports = { logEvent };\n",
+				"a.js": "const { logEvent } = require('./log');\nlogEvent('a1');\nlogEvent('a2');\n",
+				"b.js": "const { logEvent } = require('./log');\nif (x) logEvent('b1');\n// logEvent mentioned in a comment\n",
+				"c.js": "const { logEvent } = require('./log');\n[1,2].forEach(() => logEvent('c'));\n"
+			},
+			"maxSteps": 16,
+			"expect": [
+				{
+					"kind": "reply",
+					"matches": "^\\D*4\\D*$"
+				}
+			]
+		},
+		{
+			"id": "explain-config",
+			"category": "explore",
+			"prompt": "What port does the server listen on when NODE_ENV is \"production\"? Reply with just the number.",
+			"files": {
+				"server.js": "const cfg = require('./config')[process.env.NODE_ENV || 'development'];\nrequire('http').createServer().listen(cfg.port);\n",
+				"config/index.js": "module.exports = { development: require('./dev'), production: require('./prod') };\n",
+				"config/dev.js": "module.exports = { port: 3000 };\n",
+				"config/prod.js": "const base = require('./dev');\nmodule.exports = { ...base, port: base.port + 5080 };\n"
+			},
+			"maxSteps": 16,
+			"expect": [
+				{
+					"kind": "reply",
+					"matches": "^\\D*8080\\D*$"
+				}
+			]
+		},
+		{
+			"id": "locate-bug-report-only",
+			"category": "explore",
+			"prompt": "Users say discounts are applied twice. Find the file and function responsible and reply with \"file:function\". Do not change any files.",
+			"files": {
+				"cart.js": "const { discount } = require('./pricing');\nfunction checkout(items, code) {\n\tlet total = items.reduce((a, i) => a + i.price, 0);\n\ttotal = discount(total, code);\n\treturn finalize(total, code);\n}\nfunction finalize(total, code) { return discount(total, code); }\nmodule.exports = { checkout };\n",
+				"pricing.js": "function discount(total, code) { return code === 'TEN' ? total * 0.9 : total; }\nmodule.exports = { discount };\n"
+			},
+			"maxSteps": 16,
+			"expect": [
+				{
+					"kind": "reply",
+					"matches": "cart\\.js"
+				},
+				{
+					"kind": "reply",
+					"matches": "finalize|checkout"
+				},
+				{
+					"kind": "tool",
+					"name": "write_file",
+					"max": 0
+				},
+				{
+					"kind": "tool",
+					"name": "edit_file",
+					"max": 0
+				},
+				{
+					"kind": "tool",
+					"name": "apply_patch",
+					"max": 0
+				}
+			]
+		},
+		{
+			"id": "dependency-question",
+			"category": "explore",
+			"prompt": "Which npm packages does this project depend on at runtime (not dev)? Reply with their names separated by commas.",
+			"files": {
+				"package.json": "{\n  \"name\": \"x\",\n  \"dependencies\": {\n    \"express\": \"^4.0.0\",\n    \"zod\": \"^3.0.0\"\n  },\n  \"devDependencies\": {\n    \"vitest\": \"^1.0.0\"\n  }\n}\n"
+			},
+			"maxSteps": 16,
+			"expect": [
+				{
+					"kind": "reply",
+					"matches": "express"
+				},
+				{
+					"kind": "reply",
+					"matches": "zod"
+				},
+				{
+					"kind": "reply",
+					"matches": "^(?![\\s\\S]*vitest)"
+				}
+			]
+		}
+	]
+}

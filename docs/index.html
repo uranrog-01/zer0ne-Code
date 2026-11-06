@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>zer0ne Code: the desktop coding agent for every model</title>
+<meta name="description" content="Plans, edits, runs your tests in a sandbox and shows the diff. You approve, review and undo. Open source for Windows, with cloud, subscription or local models.">
+<meta name="theme-color" content="#060607">
+<meta name="color-scheme" content="dark">
+<meta property="og:type" content="website">
+<meta property="og:title" content="zer0ne Code">
+<meta property="og:description" content="The desktop coding agent for every model: cloud, subscription or local.">
+<meta property="og:url" content="https://uranrog-01.github.io/zer0ne-Code/">
+<meta property="og:image" content="https://uranrog-01.github.io/zer0ne-Code/media/hero-dark.webp">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="media/icon.png">
+<style>
+:root {
+	--bg: #060607;
+	--text: #f5f4f2;
+	--text-2: #aaa9a6;
+	--text-3: #807f7c;
+	--accent: #f7931e;
+	--accent-2: #ffcf70;
+	--line: rgba(255, 255, 255, .11);
+	--line-2: rgba(255, 255, 255, .2);
+	--glass: rgba(255, 255, 255, .045);
+	--sans: "Segoe UI Variable Text", "Segoe UI", Inter, system-ui, -apple-system, sans-serif;
+	--display: "Segoe UI Variable Display", "Segoe UI", Inter, system-ui, -apple-system, sans-serif;
+	--mono: "Cascadia Code", "JetBrains Mono", ui-monospace, Consolas, monospace;
+	--max: 1180px;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 84px; -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.6 var(--sans); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+img, video { display: block; max-width: 100%; height: auto; }
+a { color: inherit; }
+h1, h2, h3, p, ul, ol { margin: 0; padding: 0; }
+ul, ol { list-style: none; }
+code { font-family: var(--mono); font-size: .88em; }
+:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 3px; border-radius: 6px; }
+.skip { position: absolute; left: 16px; top: -60px; z-index: 20; padding: 10px 16px; border-radius: 10px; background: var(--accent); color: #140b00; font-weight: 600; }
+.skip:focus { top: 12px; }
+.wrap { width: min(var(--max), 100% - 48px); margin-inline: auto; }
+
+/* The backdrop repeats the logo's diagonal: one lit seam with binary falling along it. */
+.scene { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+.glow { position: absolute; border-radius: 50%; filter: blur(110px); }
+.glow.a { width: 640px; height: 640px; right: -180px; top: -260px; background: rgba(247, 147, 30, .3); }
+.glow.b { width: 560px; height: 560px; left: -260px; top: 55%; background: rgba(247, 110, 30, .13); }
+.seam { position: absolute; left: -20%; top: 62vh; width: 140%; height: 1px; transform: rotate(-38deg); background: linear-gradient(90deg, transparent 18%, rgba(247, 147, 30, .55) 50%, transparent 82%); box-shadow: 0 0 22px rgba(247, 147, 30, .45); }
+
+.top { position: sticky; top: 0; z-index: 10; border-bottom: 1px solid transparent; background: rgba(6, 6, 7, .72); backdrop-filter: blur(18px) saturate(1.3); -webkit-backdrop-filter: blur(18px) saturate(1.3); border-bottom-color: var(--line); }
+.top .wrap { display: flex; align-items: center; gap: 28px; height: 64px; }
+.brand { display: flex; align-items: center; gap: 10px; font-family: var(--display); font-size: 18px; font-weight: 650; letter-spacing: -.01em; text-decoration: none; }
+.brand img { width: 30px; height: 30px; }
+.top nav { display: flex; gap: 24px; margin-left: auto; font-size: 15px; color: var(--text-2); }
+.top nav a { text-decoration: none; transition: color .15s; }
+.top nav a:hover { color: var(--text); }
+.top .gh { padding: 7px 14px; border: 1px solid var(--line-2); border-radius: 999px; font-size: 14.5px; font-weight: 550; text-decoration: none; white-space: nowrap; transition: background .15s, border-color .15s; }
+.top .gh:hover { background: rgba(255, 255, 255, .08); }
+
+.hero { padding: 92px 0 72px; text-align: center; }
+.tag { font-family: var(--mono); font-size: 13.5px; color: var(--accent); letter-spacing: .02em; }
+.hero h1 { max-width: 15ch; margin: 18px auto 0; font-family: var(--display); font-size: clamp(44px, 7.4vw, 88px); line-height: 1.02; font-weight: 700; letter-spacing: -.035em; text-wrap: balance; }
+.hero h1 em { font-style: normal; background: linear-gradient(95deg, var(--accent), var(--accent-2) 70%, #fff3d6); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.lede { max-width: 42ch; margin: 24px auto 0; font-size: clamp(18px, 2.2vw, 21px); line-height: 1.5; color: var(--text-2); text-wrap: balance; }
+.cta { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 34px; }
+.btn { display: inline-flex; align-items: center; min-height: 48px; padding: 0 24px; border-radius: 12px; font-weight: 600; font-size: 16px; text-decoration: none; transition: transform .15s, background .15s, box-shadow .15s; }
+.btn.primary { background: var(--accent); color: #140b00; box-shadow: 0 8px 30px rgba(247, 147, 30, .28); }
+.btn.primary:hover { background: #ffa63c; transform: translateY(-1px); }
+.btn.ghost { border: 1px solid var(--line-2); background: var(--glass); }
+.btn.ghost:hover { background: rgba(255, 255, 255, .09); }
+.facts { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 22px; margin-top: 24px; font-size: 14.5px; color: var(--text-3); }
+
+.shot { overflow: hidden; border: 1px solid var(--line-2); border-radius: 16px; background: #0c0c0e; box-shadow: 0 30px 80px -24px rgba(0, 0, 0, .9); }
+.shot img, .shot video { width: 100%; }
+.hero .shot { margin-top: 64px; box-shadow: 0 40px 120px -30px rgba(247, 147, 30, .28), 0 30px 80px -24px rgba(0, 0, 0, .9); }
+
+section { padding: 84px 0; }
+p.eyebrow, .head p.eyebrow, .feature p.eyebrow { margin-top: 0; font-family: var(--mono); font-size: 13px; color: var(--accent); }
+h2 { margin-top: 10px; font-family: var(--display); font-size: clamp(30px, 4vw, 44px); line-height: 1.1; font-weight: 680; letter-spacing: -.025em; text-wrap: balance; }
+.head { max-width: 680px; margin-bottom: 44px; }
+.head p { margin-top: 14px; color: var(--text-2); }
+
+.why { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); border-radius: 18px; background: var(--glass); }
+.why li { padding: 28px 26px 30px; border-left: 1px solid var(--line); }
+.why li:first-child { border-left: 0; }
+h3 { font-family: var(--display); font-size: 19px; line-height: 1.25; font-weight: 640; letter-spacing: -.01em; }
+.why p { margin-top: 10px; font-size: 15.5px; line-height: 1.55; color: var(--text-2); }
+
+.film-note { margin-top: 14px; font-size: 14.5px; color: var(--text-3); text-align: center; }
+
+.feature { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 56px; align-items: center; }
+.feature.flip > :first-child { order: 2; }
+.feature p { margin-top: 14px; color: var(--text-2); }
+.points { margin-top: 20px; display: grid; gap: 12px; font-size: 15.5px; line-height: 1.5; color: var(--text-2); }
+.points li { padding-left: 16px; border-left: 2px solid rgba(247, 147, 30, .55); }
+.points strong { color: var(--text); font-weight: 600; }
+
+.steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 28px; margin: 40px 0; counter-reset: step; }
+.steps li { counter-increment: step; padding-top: 16px; border-top: 1px solid var(--line-2); font-size: 15.5px; line-height: 1.5; color: var(--text-2); }
+.steps li::before { content: "0" counter(step); display: block; margin-bottom: 8px; font-family: var(--mono); font-size: 13px; color: var(--accent); }
+.steps strong { display: block; margin-bottom: 4px; font-family: var(--display); font-size: 18px; font-weight: 640; color: var(--text); }
+.agents-shots { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+.rows { border-top: 1px solid var(--line); }
+.rows li { display: grid; grid-template-columns: 240px 1fr; gap: 24px; padding: 18px 0; border-bottom: 1px solid var(--line); color: var(--text-2); font-size: 15.5px; line-height: 1.55; }
+.rows strong { color: var(--text); font-weight: 600; }
+
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.grid3 li { padding: 24px; border: 1px solid var(--line); border-radius: 14px; background: var(--glass); }
+.grid3 p { margin-top: 8px; font-size: 15px; line-height: 1.55; color: var(--text-2); }
+
+.chips { display: flex; flex-wrap: wrap; gap: 10px; }
+.chips li { padding: 8px 15px; border: 1px solid var(--line); border-radius: 999px; background: var(--glass); font-size: 14.5px; color: var(--text-2); }
+
+.install { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.panel { padding: 30px; border: 1px solid var(--line-2); border-radius: 18px; background: var(--glass); min-width: 0; }
+.panel p { margin-top: 10px; font-size: 15.5px; color: var(--text-2); }
+.panel a:not(.btn) { color: var(--accent-2); }
+.panel .btn { margin-top: 20px; }
+.panel ol { margin-top: 14px; display: grid; gap: 8px; list-style: decimal; padding-left: 20px; font-size: 15.5px; color: var(--text-2); }
+pre { margin: 18px 0 0; padding: 16px 18px; overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: #0a0a0c; font: 14px/1.7 var(--mono); color: #d9d8d5; }
+pre .c { color: var(--text-3); }
+[hidden] { display: none !important; }
+
+footer { padding: 44px 0 56px; border-top: 1px solid var(--line); font-size: 14.5px; color: var(--text-3); }
+footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 14px 32px; }
+footer ul { display: flex; flex-wrap: wrap; gap: 8px 22px; }
+footer a { text-decoration: none; color: var(--text-2); }
+footer a:hover { color: var(--text); }
+
+@media (max-width: 980px) {
+	.why { grid-template-columns: 1fr 1fr; }
+	.why li:nth-child(3) { border-left: 0; }
+	.why li:nth-child(n+3) { border-top: 1px solid var(--line); }
+	.feature { grid-template-columns: 1fr; gap: 32px; }
+	.feature.flip > :first-child { order: 0; }
+	.steps { grid-template-columns: 1fr 1fr; }
+	.grid3 { grid-template-columns: 1fr 1fr; }
+	.install { grid-template-columns: 1fr; }
+}
+@media (max-width: 720px) {
+	.top nav { display: none; }
+	.top .gh { margin-left: auto; }
+	.hero { padding: 60px 0 48px; }
+	.hero .shot { margin-top: 44px; }
+	section { padding: 60px 0; }
+	.why, .steps, .grid3, .agents-shots { grid-template-columns: 1fr; }
+	.why li { border-left: 0; }
+	.why li:nth-child(n+2) { border-top: 1px solid var(--line); }
+	.rows li { grid-template-columns: 1fr; gap: 4px; }
+	.panel { padding: 22px; }
+	.wrap { width: calc(100% - 36px); }
+}
+@media (prefers-reduced-motion: reduce) {
+	html { scroll-behavior: auto; }
+	* { transition: none !important; }
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="scene" aria-hidden="true"><div class="glow a"></div><div class="glow b"></div><div class="seam"></div></div>
+
+<header class="top">
+	<div class="wrap">
+		<a class="brand" href="#main"><img src="media/icon.png" alt="" width="30" height="30">zer0ne Code</a>
+		<nav aria-label="Main">
+			<a href="#film">Film</a>
+			<a href="#models">Models</a>
+			<a href="#agents">Agents</a>
+			<a href="#safety">Safety</a>
+			<a href="#install">Install</a>
+		</nav>
+		<a class="gh" href="https://github.com/uranrog-01/zer0ne-Code">GitHub</a>
+	</div>
+</header>
+
+<main id="main">
+	<div class="hero">
+		<div class="wrap">
+			<p class="tag">cloud · subscription · local</p>
+			<h1>The desktop coding agent for <em>every model</em></h1>
+			<p class="lede">Plans, edits, runs your tests in a sandbox and shows the diff. You approve, review and undo.</p>
+			<div class="cta">
+				<a class="btn primary" id="hero-download" href="#install">Install</a>
+				<a class="btn ghost" href="#film">Watch the film</a>
+			</div>
+			<p class="facts"><span>Open source, MIT</span><span>Windows 10 and 11, 64-bit</span><span id="hero-version">Version 0.3.0</span></p>
+			<div class="shot"><img src="media/hero-dark.webp" width="2000" height="1318" alt="A finished agent turn: router edited, test written, both test runs passed inside the sandbox, Work Details showing the changed files"></div>
+		</div>
+	</div>
+
+	<section aria-labelledby="why-title">
+		<div class="wrap">
+			<div class="head"><p class="eyebrow">Why zer0ne Code</p><h2 id="why-title">Your models, your machine, your call</h2></div>
+			<ul class="why">
+				<li><h3>Every model, one picker</h3><p>46 plan and subscription sign-ins, 54 API-key presets and any OpenAI-, Anthropic- or Gemini-compatible endpoint.</p></li>
+				<li><h3>Keep working for $0</h3><p>Switch the same chat to a local GGUF model on zer0ne Engine (llama.cpp), Ollama or LM Studio, mid-session.</p></li>
+				<li><h3>A team, not a chatbot</h3><p>Subagents, parallel workers in isolated Git worktrees and an independent reviewer, shown as a live agent graph.</p></li>
+				<li><h3>You stay in control</h3><p>Approvals, an OS command sandbox, project command rules, per-turn checkpoints and hunk-level undo.</p></li>
+			</ul>
+		</div>
+	</section>
+
+	<section id="film" aria-labelledby="film-title">
+		<div class="wrap">
+			<div class="head"><p class="eyebrow">74 seconds</p><h2 id="film-title">See a real session, start to finish</h2></div>
+			<div class="shot"><video controls playsinline preload="none" poster="media/hero-dark.webp" width="1920" height="1080" aria-label="zer0ne Code product film"><source src="media/film.mp4" type="video/mp4"><a href="media/film.mp4">Download the film</a></video></div>
+			<p class="film-note">Real app footage, driven by a scripted demo model.</p>
+		</div>
+	</section>
+
+	<section id="models" aria-labelledby="models-title">
+		<div class="wrap feature">
+			<div>
+				<p class="eyebrow">Any model</p>
+				<h2 id="models-title">Bring the plans you already pay for</h2>
+				<p>Sign in, add API keys, or point at your own endpoint. Enabled models appear in one picker, and you can switch at any message.</p>
+				<ul class="points">
+					<li><strong>Plans and subscriptions:</strong> ChatGPT, Claude, Google Antigravity, GitHub Copilot, Cursor, OpenRouter, Kimi, MiniMax, Grok and more, through each vendor's own login.</li>
+					<li><strong>API keys:</strong> key pools rotate past rate-limited keys, and fallback models take over in order when one is exhausted.</li>
+					<li><strong>Custom endpoints:</strong> Chat Completions, Responses, Anthropic Messages and native Gemini formats.</li>
+				</ul>
+			</div>
+			<div class="shot"><img loading="lazy" src="media/providers.webp" width="2000" height="1318" alt="Add provider: plans and subscriptions"></div>
+		</div>
+	</section>
+
+	<section aria-labelledby="local-title">
+		<div class="wrap feature flip">
+			<div>
+				<p class="eyebrow">Local LLMs</p>
+				<h2 id="local-title">Out of credits or offline? Keep going</h2>
+				<p>Keep the same project and conversation on your own hardware.</p>
+				<ul class="points">
+					<li><strong>zer0ne Engine</strong> bundles llama.cpp, installs on demand and fits each model's context to available memory.</li>
+					<li><strong>Fit check</strong> rates any Hugging Face model for this PC before you download. Downloads are checksum-verified.</li>
+					<li><strong>Offline fallback</strong> continues on your local helper model when the cloud cannot be reached.</li>
+					<li><strong>Local Host router</strong> serves your local models as OpenAI- and Anthropic-compatible APIs for other tools.</li>
+				</ul>
+			</div>
+			<div class="shot"><img loading="lazy" src="media/local-models.webp" width="2000" height="1318" alt="Local models: zer0ne Engine and runtimes"></div>
+		</div>
+	</section>
+
+	<section id="agents" aria-labelledby="agents-title">
+		<div class="wrap">
+			<div class="head">
+				<p class="eyebrow">Agents and workflows</p>
+				<h2 id="agents-title">Give a chat a team with <code>/workflow</code></h2>
+				<p>The main agent hands focused work to specialists, each with its own context, tools and model. Add your own per project in <code>.zer0ne/agents</code>.</p>
+			</div>
+			<div class="agents-shots">
+				<div class="shot"><img loading="lazy" src="media/agents.webp" width="2000" height="1318" alt="Three Explore subagents reviewing a project in parallel, with the live agent graph"></div>
+				<div class="shot"><img loading="lazy" src="media/workflow.webp" width="2000" height="1318" alt="Workflow graph with workers and reviewer, and the Work Details terminal"></div>
+			</div>
+			<ol class="steps">
+				<li><strong>Delegate</strong>Workers run in parallel. Coding workers get their own Git branch and worktree, so your checkout stays clean.</li>
+				<li><strong>Review</strong>A separate reviewer checks the workers' changes before anything is reported as done.</li>
+				<li><strong>Evidence</strong>Every task records commands, exit codes and check snapshots you can inspect.</li>
+				<li><strong>Apply</strong>Review the diff, then apply it with an Undo checkpoint, or discard the worktree.</li>
+			</ol>
+		</div>
+	</section>
+
+	<section aria-labelledby="dock-title">
+		<div class="wrap feature">
+			<div>
+				<p class="eyebrow">AI Dock</p>
+				<h2 id="dock-title">A Dynamic Island for your agents</h2>
+				<ul class="points">
+					<li><strong>See</strong> what each project is thinking, writing or running, with checks, changed files, context and cost.</li>
+					<li><strong>Act</strong> without opening the app: approve, reject or answer, and stop or reply to a running agent.</li>
+					<li><strong>Drop</strong> files, images or text on it and ask about them.</li>
+					<li><strong>Stay discreet:</strong> it hides project details while you present or share your screen.</li>
+				</ul>
+			</div>
+			<div class="shot"><img loading="lazy" src="media/ai-dock.webp" width="1600" height="820" alt="AI Dock expanded: an approval waiting, budget meter and recent notifications"></div>
+		</div>
+	</section>
+
+	<section aria-labelledby="tools-title">
+		<div class="wrap feature flip">
+			<div>
+				<p class="eyebrow">Tools</p>
+				<h2 id="tools-title">MCP, skills and hooks built in</h2>
+				<ul class="points">
+					<li><strong>MCP:</strong> a catalog of 33 ready-to-configure servers, official MCP Registry search and interactive MCP apps in isolated frames.</li>
+					<li><strong>Skills and plugins:</strong> install from a folder, a Git URL or the marketplace, or record a workflow into a skill.</li>
+					<li><strong>Hooks:</strong> run your own commands around prompts, tools and stops, with templates for formatting, linting and protecting <code>.env</code>.</li>
+					<li><strong>Browser agent:</strong> tests the app it just changed, with web search and fetch.</li>
+				</ul>
+			</div>
+			<div class="shot"><img loading="lazy" src="media/mcp.webp" width="2000" height="1318" alt="MCP servers: Discover catalog"></div>
+		</div>
+	</section>
+
+	<section aria-labelledby="lean-title">
+		<div class="wrap">
+			<div class="head"><p class="eyebrow">Lean context</p><h2 id="lean-title">Long sessions stay fast and affordable</h2></div>
+			<ul class="rows">
+				<li><strong>RTK Token Saver</strong><span>Compresses tool output before it reaches the model. Errors and stack traces are kept, and the full output stays in the chat card.</span></li>
+				<li><strong>Prompt cache</strong><span>Keeps the request prefix stable and warm, and reports cache reads and writes.</span></li>
+				<li><strong>Auto Compact</strong><span>Summarises older turns at a percentage or token ceiling so the session keeps going.</span></li>
+				<li><strong>Repository map</strong><span>Starts each task with a map of about 1,000 tokens covering folders, key files and symbols.</span></li>
+				<li><strong>Usage stats</strong><span>Tokens, cache hits and cost per model, exportable as CSV.</span></li>
+			</ul>
+		</div>
+	</section>
+
+	<section aria-labelledby="themes-title">
+		<div class="wrap">
+			<div class="head">
+				<p class="eyebrow">Make it yours</p>
+				<h2 id="themes-title">33 themes and real Liquid Glass</h2>
+				<p>Choose accent colours, fonts and an importable theme JSON, set a photo or animated GIF as the background, or turn on real window transparency from 0 to 100%.</p>
+			</div>
+			<div class="agents-shots">
+				<div class="shot"><img loading="lazy" src="media/themes.webp" width="1972" height="1007" alt="Eight of the built-in themes"></div>
+				<div class="shot"><img loading="lazy" src="media/transparent-mode.webp" width="2000" height="1318" alt="Transparent mode with a sample desktop wallpaper showing through"></div>
+			</div>
+		</div>
+	</section>
+
+	<section id="safety" aria-labelledby="safety-title">
+		<div class="wrap">
+			<div class="head"><p class="eyebrow">Safety by design</p><h2 id="safety-title">Nothing happens behind your back</h2></div>
+			<ul class="grid3">
+				<li><h3>Access modes</h3><p>Chat answers only. Agent reads freely and asks before edits, commands and MCP. Full access is your choice.</p></li>
+				<li><h3>Command sandbox</h3><p>Commands run in an OS sandbox and are marked SANDBOX in the chat.</p></li>
+				<li><h3>Command rules</h3><p><code>allow:</code>, <code>ask:</code> and <code>deny:</code> lines per project. Allow lines from a repository wait until you trust them.</p></li>
+				<li><h3>Secrets</h3><p>API keys are encrypted with a key your OS protects, and commands start without secret-looking environment variables.</p></li>
+				<li><h3>Checkpoints</h3><p>Every turn can be restored file by file.</p></li>
+				<li><h3>Isolated pages</h3><p>The UI runs sandboxed with a single, permission-checked bridge to the app.</p></li>
+			</ul>
+		</div>
+	</section>
+
+	<section aria-labelledby="more-title">
+		<div class="wrap">
+			<div class="head"><p class="eyebrow">And more</p><h2 id="more-title">The rest of the toolbox</h2></div>
+			<ul class="chips">
+				<li>Mobile Remote</li><li>Computer Use</li><li>Side Chat</li><li>Benchmark with 37 coding tasks</li><li>Cloud tasks</li><li>Quick prompt</li><li>Profile backup and restore</li><li>CI and review events</li><li>Headless CLI</li>
+			</ul>
+		</div>
+	</section>
+
+	<section id="install" aria-labelledby="install-title">
+		<div class="wrap">
+			<div class="head"><p class="eyebrow">Install</p><h2 id="install-title">Get zer0ne Code</h2><p>Windows 10 or 11, 64-bit.</p></div>
+			<div class="install">
+				<div class="panel" id="release-panel" hidden>
+					<h3>Windows installer</h3>
+					<p>Installs per user without an administrator prompt. Uninstalling keeps your chats and settings.</p>
+					<a class="btn primary" id="release-link" href="https://github.com/uranrog-01/zer0ne-Code/releases/latest">Download</a>
+					<p><a id="release-sum" href="https://github.com/uranrog-01/zer0ne-Code/releases/latest">SHA-256 checksum and release notes</a></p>
+				</div>
+				<div class="panel" id="no-release-panel">
+					<h3>Windows installer</h3>
+					<p>No installer has been published yet. It will appear on the <a href="https://github.com/uranrog-01/zer0ne-Code/releases">Releases page</a>. Until then, build the app from source.</p>
+				</div>
+				<div class="panel">
+					<h3>Build from source</h3>
+					<p>Requires <a href="https://nodejs.org">Node.js</a> 22 or newer.</p>
+<pre><code>git clone https://github.com/uranrog-01/zer0ne-Code
+cd zer0ne-Code
+build.bat run</code></pre>
+					<p><a href="https://github.com/uranrog-01/zer0ne-Code/blob/main/docs/building.md">Building and releasing</a></p>
+				</div>
+			</div>
+		</div>
+	</section>
+</main>
+
+<footer>
+	<div class="wrap">
+		<span>zer0ne Code. MIT License.</span>
+		<ul>
+			<li><a href="https://github.com/uranrog-01/zer0ne-Code">GitHub</a></li>
+			<li><a href="https://github.com/uranrog-01/zer0ne-Code/blob/main/docs/guide.md">User guide</a></li>
+			<li><a href="https://github.com/uranrog-01/zer0ne-Code/blob/main/CHANGELOG.md">Changelog</a></li>
+			<li><a href="https://github.com/uranrog-01/zer0ne-Code/blob/main/SECURITY.md">Security</a></li>
+		</ul>
+	</div>
+</footer>
+
+<script>
+// The page must stay correct with no release and when GitHub's API is unavailable, so the
+// static markup describes that case and a published installer only upgrades it.
+fetch('https://api.github.com/repos/uranrog-01/zer0ne-Code/releases/latest', { headers: { Accept: 'application/vnd.github+json' } })
+	.then(response => response.ok ? response.json() : null)
+	.then(release => {
+		const assets = release && release.assets || [];
+		const setup = assets.find(asset => /Setup.*\.exe$/i.test(asset.name));
+		if (!setup) return;
+		const sum = assets.find(asset => /\.sha256$/i.test(asset.name));
+		const version = String(release.tag_name || '').replace(/^v/, '');
+		document.getElementById('hero-download').textContent = 'Download for Windows';
+		document.getElementById('hero-download').href = setup.browser_download_url;
+		document.getElementById('release-link').href = setup.browser_download_url;
+		document.getElementById('release-link').textContent = 'Download' + (version ? ' ' + version : '');
+		if (version) document.getElementById('hero-version').textContent = 'Version ' + version;
+		if (sum) document.getElementById('release-sum').href = sum.browser_download_url;
+		document.getElementById('release-panel').hidden = false;
+		document.getElementById('no-release-panel').hidden = true;
+	})
+	.catch(() => {});
+</script>
+</body>
+</html>

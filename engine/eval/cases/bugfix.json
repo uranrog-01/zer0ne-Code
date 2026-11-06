@@ -1,0 +1,156 @@
+{
+	"cases": [
+		{
+			"id": "fix-off-by-one",
+			"category": "bugfix",
+			"prompt": "The function lastN in src/list.js should return the last n items of an array, but it returns one item too many. Fix it.",
+			"files": {
+				"src/list.js": "function lastN(items, n) {\n\treturn items.slice(items.length - n - 1);\n}\nmodule.exports = { lastN };\n"
+			},
+			"hidden": {
+				"grade.js": "const assert = require('assert');\nconst { lastN } = require('./src/list.js');\nassert.deepStrictEqual(lastN([1, 2, 3, 4], 2), [3, 4]);\nassert.deepStrictEqual(lastN([1, 2, 3], 3), [1, 2, 3]);\nassert.deepStrictEqual(lastN([1, 2, 3], 1), [3]);\nconsole.log('ok');\n"
+			},
+			"maxSteps": 16,
+			"expect": [
+				{
+					"kind": "check",
+					"script": "grade.js"
+				}
+			]
+		},
+		{
+			"id": "fix-failing-test",
+			"category": "bugfix",
+			"prompt": "npm test fails (run it with: node test.js). Find the bug in the source and fix it. Do not change test.js.",
+			"files": {
+				"price.js": "// Price with tax, rounded to cents.\nfunction withTax(amount, rate) {\n\treturn Math.round(amount * rate * 100) / 100;\n}\nmodule.exports = { withTax };\n",
+				"test.js": "const assert = require('assert');\nconst { withTax } = require('./price.js');\nassert.strictEqual(withTax(100, 0.2), 120);\nassert.strictEqual(withTax(9.99, 0.1), 10.99);\nconsole.log('tests passed');\n"
+			},
+			"hidden": {
+				"grade.js": "const assert = require('assert');\nconst { withTax } = require('./price.js');\nassert.strictEqual(withTax(100, 0.2), 120);\nassert.strictEqual(withTax(50, 0), 50);\nassert.strictEqual(withTax(10, 0.25), 12.5);\nconsole.log('ok');\n"
+			},
+			"maxSteps": 16,
+			"expect": [
+				{
+					"kind": "check",
+					"script": "grade.js"
+				},
+				{
+					"kind": "file",
+					"path": "test.js",
+					"contains": "assert.strictEqual(withTax(9.99, 0.1), 10.99);"
+				}
+			]
+		},
+		{
+			"id": "fix-async-await",
+			"category": "bugfix",
+			"prompt": "loadAll in src/load.js returns before the files are read, so callers get an array of promises. Make it resolve to the contents.",
+			"files": {
+				"src/load.js": "const fs = require('fs/promises');\nasync function loadAll(paths) {\n\treturn paths.map((p) => fs.readFile(p, 'utf8'));\n}\nmodule.exports = { loadAll };\n"
+			},
+			"hidden": {
+				"grade.js": "const assert = require('assert');\nconst fs = require('fs');\nfs.writeFileSync('a.txt', 'A'); fs.writeFileSync('b.txt', 'B');\nrequire('./src/load.js').loadAll(['a.txt', 'b.txt']).then((r) => {\n\tassert.deepStrictEqual(r, ['A', 'B']);\n\tconsole.log('ok');\n}).catch((e) => { console.error(e); process.exit(1); });\n"
+			},
+			"maxSteps": 16,
+			"expect": [
+				{
+					"kind": "check",
+					"script": "grade.js"
+				}
+			]
+		},
+		{
+			"id": "fix-mutation",
+			"category": "bugfix",
+			"prompt": "sorted() in util.js is supposed to return a sorted copy, but it changes the caller's array. Fix it without changing its results.",
+			"files": {
+				"util.js": "function sorted(values) {\n\treturn values.sort((a, b) => a - b);\n}\nmodule.exports = { sorted };\n"
+			},
+			"hidden": {
+				"grade.js": "const assert = require('assert');\nconst { sorted } = require('./util.js');\nconst input = [3, 1, 2];\nassert.deepStrictEqual(sorted(input), [1, 2, 3]);\nassert.deepStrictEqual(input, [3, 1, 2]);\nassert.deepStrictEqual(sorted([10, 9, 100]), [9, 10, 100]);\nconsole.log('ok');\n"
+			},
+			"maxSteps": 16,
+			"expect": [
+				{
+					"kind": "check",
+					"script": "grade.js"
+				}
+			]
+		},
+		{
+			"id": "fix-parse-edge",
+			"category": "bugfix",
+			"prompt": "parseQuery in query.js crashes on an empty string and keeps the leading \"?\". Fix both: parseQuery(\"\") returns {} and parseQuery(\"?a=1\") returns {a: \"1\"}. Values must be URL-decoded.",
+			"files": {
+				"query.js": "function parseQuery(q) {\n\tconst out = {};\n\tfor (const pair of q.split('&')) {\n\t\tconst [k, v] = pair.split('=');\n\t\tout[k] = v;\n\t}\n\treturn out;\n}\nmodule.exports = { parseQuery };\n"
+			},
+			"hidden": {
+				"grade.js": "const assert = require('assert');\nconst { parseQuery } = require('./query.js');\nassert.deepStrictEqual(parseQuery(''), {});\nassert.deepStrictEqual(parseQuery('?a=1'), { a: '1' });\nassert.deepStrictEqual(parseQuery('a=1&b=two%20words'), { a: '1', b: 'two words' });\nconsole.log('ok');\n"
+			},
+			"maxSteps": 16,
+			"expect": [
+				{
+					"kind": "check",
+					"script": "grade.js"
+				}
+			]
+		},
+		{
+			"id": "fix-cross-file",
+			"category": "bugfix",
+			"prompt": "The report total is wrong: totals.js double-counts refunds. Find where and fix it.",
+			"files": {
+				"data.js": "module.exports = [{ kind: 'sale', amount: 50 }, { kind: 'refund', amount: 20 }, { kind: 'sale', amount: 30 }];\n",
+				"money.js": "// Signed amount: refunds count against the total.\nfunction signed(entry) {\n\treturn entry.kind === 'refund' ? -entry.amount : entry.amount;\n}\nmodule.exports = { signed };\n",
+				"totals.js": "const { signed } = require('./money.js');\nfunction total(entries) {\n\tlet sum = 0;\n\tfor (const e of entries) {\n\t\tsum += signed(e);\n\t\tif (e.kind === 'refund') sum -= e.amount;\n\t}\n\treturn sum;\n}\nmodule.exports = { total };\n"
+			},
+			"hidden": {
+				"grade.js": "const assert = require('assert');\nconst { total } = require('./totals.js');\nassert.strictEqual(total(require('./data.js')), 60);\nassert.strictEqual(total([{ kind: 'refund', amount: 5 }]), -5);\nconsole.log('ok');\n"
+			},
+			"maxSteps": 16,
+			"expect": [
+				{
+					"kind": "check",
+					"script": "grade.js"
+				}
+			]
+		},
+		{
+			"id": "fix-regex",
+			"category": "bugfix",
+			"prompt": "isEmail in validate.js rejects valid addresses with a plus sign (like a+b@x.io) and accepts \"a@b\" with no dot in the domain. Fix it.",
+			"files": {
+				"validate.js": "function isEmail(s) {\n\treturn /^[a-z0-9.]+@[a-z0-9.]+$/i.test(s);\n}\nmodule.exports = { isEmail };\n"
+			},
+			"hidden": {
+				"grade.js": "const assert = require('assert');\nconst { isEmail } = require('./validate.js');\nassert.ok(isEmail('a+b@x.io'));\nassert.ok(isEmail('first.last@sub.example.com'));\nassert.ok(!isEmail('a@b'));\nassert.ok(!isEmail('no-at.example.com'));\nassert.ok(!isEmail('two@@x.io'));\nconsole.log('ok');\n"
+			},
+			"maxSteps": 16,
+			"expect": [
+				{
+					"kind": "check",
+					"script": "grade.js"
+				}
+			]
+		},
+		{
+			"id": "fix-python-style-bug-js-class",
+			"category": "bugfix",
+			"prompt": "Counter in counter.js shares its counts between instances. Make every Counter independent.",
+			"files": {
+				"counter.js": "const counts = {};\nclass Counter {\n\tadd(key) { counts[key] = (counts[key] || 0) + 1; }\n\tget(key) { return counts[key] || 0; }\n}\nmodule.exports = { Counter };\n"
+			},
+			"hidden": {
+				"grade.js": "const assert = require('assert');\nconst { Counter } = require('./counter.js');\nconst a = new Counter(), b = new Counter();\na.add('x'); a.add('x'); b.add('x');\nassert.strictEqual(a.get('x'), 2);\nassert.strictEqual(b.get('x'), 1);\nassert.strictEqual(new Counter().get('x'), 0);\nconsole.log('ok');\n"
+			},
+			"maxSteps": 16,
+			"expect": [
+				{
+					"kind": "check",
+					"script": "grade.js"
+				}
+			]
+		}
+	]
+}

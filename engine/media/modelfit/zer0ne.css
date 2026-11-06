@@ -1,0 +1,65 @@
+/*
+ * Models Fit Studio's page in zer0ne code's colours (keyed to data-host: the page resets its own data-theme). zer0ne-bridge.js copies the Settings
+ * page's theme tokens onto this page as --zc-*; here they become the page's own variables,
+ * so every theme and accent of zer0ne code applies. Controls that only mean something in
+ * the Windows app (tray, start with Windows, its own theme picker and engine downloads, a
+ * second library folder) are hidden: zer0ne code has its own for each.
+ */
+:root[data-host="zer0ne"] {
+	--bg: var(--zc-bg, #0e1013);
+	--bg-2: var(--zc-panel, var(--zc-bg, #121418));
+	--panel: var(--zc-card, #16181d);
+	--panel-2: var(--zc-panel, #121418);
+	--panel-elevated: var(--zc-popover, #1c1f25);
+	--panel-card: var(--zc-card, #16181d);
+
+	--line: var(--zc-border, rgba(255, 255, 255, 0.07));
+	--line-2: var(--zc-border-strong, rgba(255, 255, 255, 0.11));
+	--line-highlight: var(--zc-border-strong, rgba(255, 255, 255, 0.2));
+
+	--text: var(--zc-fg, #eceef1);
+	--text-2: var(--zc-muted, #a4aab5);
+	--text-3: var(--zc-subtle, #737a87);
+
+	--accent: var(--zc-accent, #3b82f6);
+	--accent-rgb: var(--zc-accent-rgb, 59, 130, 246);
+	--accent-dark: var(--zc-on-accent, #ffffff);
+	--accent-dim: var(--zc-accent-soft, rgba(var(--accent-rgb), 0.14));
+	--accent-2: var(--zc-accent-strong, #60a5fa);
+	--accent-2-dim: var(--zc-accent-soft, rgba(var(--accent-rgb), 0.14));
+
+	--ok: var(--zc-ok, #46bf72);
+	--ok-dim: color-mix(in srgb, var(--ok) 13%, transparent);
+	--warn: var(--zc-warn, #ff8a30);
+	--warn-dim: color-mix(in srgb, var(--warn) 13%, transparent);
+	--bad: var(--zc-bad, #ff5c5c);
+	--bad-dim: color-mix(in srgb, var(--bad) 13%, transparent);
+	--vc: var(--ok);
+
+	--r: 12px;
+	--r-sm: 9px;
+	--grad: linear-gradient(90deg, var(--accent), var(--accent));
+	--font: var(--zc-font, "Segoe UI", system-ui, sans-serif);
+	--mono: var(--zc-mono, "Cascadia Mono", Consolas, monospace);
+}
+
+:root[data-host="zer0ne"] body { background: var(--bg); color: var(--text); font-family: var(--font); }
+
+/* Framed by Settings: the page fills the frame, not the window. */
+:root[data-host="zer0ne"] .app { height: 100vh; }
+
+/* The Windows app's own: zer0ne code has its theme in Appearance, its engine in Engine & more,
+   and keeps models in its own folder. */
+:root[data-host="zer0ne"] #themeBtn,
+:root[data-host="zer0ne"] #themeMenu,
+:root[data-host="zer0ne"] .settings-field:has(#settingsMinimizeToTray),
+:root[data-host="zer0ne"] .settings-field:has(#settingsStartWithWindows),
+:root[data-host="zer0ne"] #nvidiaRow,
+:root[data-host="zer0ne"] #shareSpeedsBtn,
+:root[data-host="zer0ne"] #removeEngineBtn,
+:root[data-host="zer0ne"] #installEngineBtn,
+:root[data-host="zer0ne"] #changeLibFolderBtn,
+:root[data-host="zer0ne"] #settingsChangeDirBtn { display: none !important; }
+
+/* The tab zer0ne code adds: it opens zer0ne Engine's settings beside the page. */
+:root[data-host="zer0ne"] .tab.zc-more { margin-left: auto; }

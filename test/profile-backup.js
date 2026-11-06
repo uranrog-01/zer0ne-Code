@@ -1,0 +1,67 @@
+'use strict';
+const assert = require('assert/strict');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+const crypto = require('crypto');
+const zlib = require('zlib');
+const { createBackup, readBackup, restoreBackup, validPath } = require('../app/profile-backup');
+const base = fs.mkdtempSync(path.join(os.tmpdir(), 'zer0ne-backup-test-'));
+const root = path.join(base, 'profile');
+const put = (file, bytes) => { const p = path.join(root, file); fs.mkdirSync(path.dirname(p), { recursive:true }); fs.writeFileSync(p, bytes); };
+const digest = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
+const safe = { isEncryptionAvailable:()=>true, decryptString:bytes => { if (bytes.toString() !== 'protected-fixture-key') throw Error('wrong account'); return Buffer.alloc(32, 7).toString('base64'); } };
+
+(async () => {
+	try {
+		put('window.json', '{"width":1200}'); put('data/global-state.json', '{"chats":["original"],"aiChat.remoteToken":"fixture-private","aiChat.remoteDevices":[{"token":"fixture-private"}]}');
+		put('data/secrets.v2.json', '{"encrypted":"fixture"}'); put('data/.engine-key.safe', 'protected-fixture-key');
+		put('data/.engine-key.bak', 'excluded plaintext key backup'); put('data/secrets.json.bak', '{"legacy":"excluded"}');
+		put('data/global-state.json.bak', '{"aiChat.remoteToken":"stale-private-token","aiChat.remoteDevices":[{"token":"stale-private-token"}]}');
+		put('data/global/models/large.gguf', 'excluded model'); put('data/webview/cookies', 'excluded cookie');
+		const file = path.join(base, 'backup.zcbackup');
+		const manifest = await createBackup(root, file);
+		assert.equal(manifest.files.length, 3); assert.equal(manifest.credentials, 'excluded');
+		let restoredState;
+		await readBackup(file, {}, (relative, bytes) => { if (relative === 'data/global-state.json') restoredState = JSON.parse(bytes); });
+		assert(!restoredState['aiChat.remoteToken']); assert(!restoredState['aiChat.remoteDevices']);
+		await readBackup(file, {}, (relative, bytes) => { if (relative.endsWith('.json.bak')) assert.deepEqual(JSON.parse(bytes), {}); });
+		for (const relative of ['data/.engine-key.bak','data/secrets.json.bak']) assert.equal(validPath(relative, true), false);
+		put('window.json', '{"width":900}'); put('data/global-state.json', '{"chats":["changed"]}'); put('data/extra.json', '{}');
+		const result = await restoreBackup(root, file);
+		assert.equal(JSON.parse(fs.readFileSync(path.join(root, 'window.json'))).width, 1200);
+		assert(!fs.existsSync(path.join(root, 'data/extra.json')));
+		assert(fs.existsSync(path.join(root, 'data/.engine-key.safe'))); assert(fs.existsSync(path.join(root, 'data/global/models/large.gguf')));
+		assert.equal(JSON.parse(fs.readFileSync(path.join(result.recovery, 'window.json'))).width, 900);
+		put('data/global-state.json', '{broken');
+		await restoreBackup(root, file);
+		assert.deepEqual(JSON.parse(fs.readFileSync(path.join(root, 'data/global-state.json'))).chats, ['original']);
+		console.log('ok profile round-trip, excluded models/cookies/sign-ins, revoked pairing tokens and retained recovery copy');
+		const withKeys = path.join(base, 'with-keys.zcbackup');
+		await createBackup(root, withKeys, { credentials:true, safe });
+		await assert.rejects(readBackup(withKeys, { safe:{ ...safe, decryptString:()=>{ throw Error('other user'); } } }), /account/);
+		put('data/.engine-key', Buffer.alloc(32, 9).toString('base64'));
+		await restoreBackup(root, withKeys, { safe });
+		assert(!fs.existsSync(path.join(root, 'data/.engine-key')));
+		console.log('ok sign-in backups require the correct OS account and cannot retain a conflicting legacy key');
+		for (const p of ['../outside','data/../../outside','data/a:stream','data/CON','data/a\\b','data/x.','window.json/child','data/models/x.json']) assert.equal(validPath(p), false, p);
+		const snapshot = fs.readFileSync(path.join(root, 'window.json'));
+		const forged = path.join(base, 'forged.zcbackup');
+		const entry = {path:'data/../../outside',size:1,sha256:digest('x')};
+		fs.writeFileSync(forged,zlib.gzipSync(JSON.stringify({format:'zer0ne-profile',version:1,credentials:'excluded',files:[entry],totalBytes:1})+'\n'));
+		await assert.rejects(restoreBackup(root, forged), /Invalid/); assert(fs.readFileSync(path.join(root,'window.json')).equals(snapshot));
+		const truncated = path.join(base,'truncated.zcbackup'); const original = fs.readFileSync(file); fs.writeFileSync(truncated, original.subarray(0, original.length - 12));
+		await assert.rejects(restoreBackup(root,truncated)); assert(fs.readFileSync(path.join(root,'window.json')).equals(snapshot));
+		console.log('ok traversal, Windows aliases, excluded paths and truncated archives cannot modify the profile');
+		const link = path.join(root,'data','escape'); fs.symlinkSync(base,link,process.platform === 'win32' ? 'junction' : 'dir');
+		await assert.rejects(createBackup(root,path.join(base,'link.zcbackup')),/links/); fs.unlinkSync(link);
+		await assert.rejects(createBackup(root,path.join(root,'backup.zcbackup')),/outside/);
+		console.log('ok profile backup rejects links and recursive destinations');
+		put('window.json', '{"width":777}');
+		const rename = fs.promises.rename; let calls = 0;
+		fs.promises.rename = async (...args) => { if (++calls === 2) throw Object.assign(Error('injected disk failure'), {code:'EIO'}); return rename(...args); };
+		try { await assert.rejects(restoreBackup(root,file), /previous profile was recovered/); } finally { fs.promises.rename = rename; }
+		assert.equal(JSON.parse(fs.readFileSync(path.join(root,'window.json'))).width,777);
+		console.log('ok partial restore failure rolls back every applied file');
+	} finally { if (path.dirname(root) === base && path.basename(base).startsWith('zer0ne-backup-test-')) fs.rmSync(base,{recursive:true,force:true}); }
+})().catch(error=>{console.error(error);process.exitCode=1;});

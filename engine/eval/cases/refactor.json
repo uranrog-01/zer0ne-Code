@@ -1,0 +1,98 @@
+{
+	"cases": [
+		{
+			"id": "rename-symbol",
+			"category": "refactor",
+			"prompt": "Rename the function calc to calculateTotal everywhere in the project. Behavior must not change.",
+			"files": {
+				"lib/calc.js": "function calc(items) { return items.reduce((a, b) => a + b, 0); }\nmodule.exports = { calc };\n",
+				"app.js": "const { calc } = require('./lib/calc.js');\nmodule.exports = () => calc([1, 2, 3]);\n",
+				"report.js": "const { calc } = require('./lib/calc.js');\nmodule.exports = (xs) => `Total: ${calc(xs)}`;\n"
+			},
+			"hidden": {
+				"grade.js": "const assert = require('assert');\nconst fs = require('fs');\nfor (const f of ['lib/calc.js', 'app.js', 'report.js']) assert.ok(!/\\bcalc\\b/.test(fs.readFileSync(f, 'utf8').replace(/require\\([^)]*\\)/g, '')), f + ' still uses calc');\nassert.strictEqual(require('./app.js')(), 6);\nassert.strictEqual(require('./report.js')([2, 2]), 'Total: 4');\nassert.strictEqual(typeof require('./lib/calc.js').calculateTotal, 'function');\nconsole.log('ok');\n"
+			},
+			"maxSteps": 16,
+			"expect": [
+				{
+					"kind": "check",
+					"script": "grade.js"
+				}
+			]
+		},
+		{
+			"id": "extract-function",
+			"category": "refactor",
+			"prompt": "orders.js and invoices.js both contain the same tax calculation. Extract it into a shared tax.js module exporting applyTax(amount) and use it from both files.",
+			"files": {
+				"orders.js": "function orderTotal(amount) {\n\tconst taxed = Math.round(amount * 1.21 * 100) / 100;\n\treturn taxed;\n}\nmodule.exports = { orderTotal };\n",
+				"invoices.js": "function invoiceLine(amount) {\n\tconst taxed = Math.round(amount * 1.21 * 100) / 100;\n\treturn `Due: ${taxed}`;\n}\nmodule.exports = { invoiceLine };\n"
+			},
+			"hidden": {
+				"grade.js": "const assert = require('assert');\nconst fs = require('fs');\nassert.strictEqual(require('./tax.js').applyTax(100), 121);\nassert.strictEqual(require('./orders.js').orderTotal(10), 12.1);\nassert.strictEqual(require('./invoices.js').invoiceLine(10), 'Due: 12.1');\nfor (const f of ['orders.js', 'invoices.js']) {\n\tconst s = fs.readFileSync(f, 'utf8');\n\tassert.ok(/require\\(['\"]\\.\\/tax(\\.js)?['\"]\\)/.test(s), f + ' does not use tax.js');\n\tassert.ok(!s.includes('1.21'), f + ' still has its own tax rate');\n}\nconsole.log('ok');\n"
+			},
+			"maxSteps": 16,
+			"expect": [
+				{
+					"kind": "check",
+					"script": "grade.js"
+				}
+			]
+		},
+		{
+			"id": "callbacks-to-async",
+			"category": "refactor",
+			"prompt": "Convert readConfig in store.js from a callback API to one that returns a promise (an async function). Update main.js to use it with await. Behavior otherwise unchanged.",
+			"files": {
+				"store.js": "const fs = require('fs');\nfunction readConfig(file, cb) {\n\tfs.readFile(file, 'utf8', (err, text) => {\n\t\tif (err) return cb(err);\n\t\tcb(null, JSON.parse(text));\n\t});\n}\nmodule.exports = { readConfig };\n",
+				"main.js": "const { readConfig } = require('./store.js');\nmodule.exports = function main(file, done) {\n\treadConfig(file, (err, cfg) => done(err, cfg && cfg.name));\n};\n"
+			},
+			"hidden": {
+				"grade.js": "const assert = require('assert');\nconst fs = require('fs');\nfs.writeFileSync('c.json', JSON.stringify({ name: 'z' }));\nconst { readConfig } = require('./store.js');\nconst p = readConfig('c.json');\nassert.ok(p && typeof p.then === 'function', 'readConfig does not return a promise');\np.then(async (cfg) => {\n\tassert.deepStrictEqual(cfg, { name: 'z' });\n\tawait assert.rejects(readConfig('missing.json'));\n\tassert.ok(/await/.test(fs.readFileSync('main.js', 'utf8')), 'main.js does not await');\n\tconsole.log('ok');\n}).catch((e) => { console.error(e); process.exit(1); });\n"
+			},
+			"maxSteps": 16,
+			"expect": [
+				{
+					"kind": "check",
+					"script": "grade.js"
+				}
+			]
+		},
+		{
+			"id": "split-module",
+			"category": "refactor",
+			"prompt": "utils.js has grown too big. Move the date helpers (formatDate, parseDate) into dates.js and the string helpers (pad, truncate) into text.js. Keep utils.js re-exporting all four so existing imports keep working.",
+			"files": {
+				"utils.js": "function formatDate(d) { return d.toISOString().slice(0, 10); }\nfunction parseDate(s) { return new Date(s + 'T00:00:00Z'); }\nfunction pad(s, n) { return String(s).padStart(n, '0'); }\nfunction truncate(s, n) { return s.length > n ? s.slice(0, n - 1) + '…' : s; }\nmodule.exports = { formatDate, parseDate, pad, truncate };\n"
+			},
+			"hidden": {
+				"grade.js": "const assert = require('assert');\nconst fs = require('fs');\nconst d = require('./dates.js'), x = require('./text.js'), u = require('./utils.js');\nassert.strictEqual(d.formatDate(d.parseDate('2024-02-03')), '2024-02-03');\nassert.strictEqual(x.pad(7, 3), '007');\nassert.strictEqual(x.truncate('abcdef', 4), 'abc…');\nfor (const k of ['formatDate', 'parseDate', 'pad', 'truncate']) assert.strictEqual(typeof u[k], 'function', k);\nassert.ok(!fs.readFileSync('utils.js', 'utf8').includes('padStart'), 'utils.js still holds the code');\nconsole.log('ok');\n"
+			},
+			"maxSteps": 16,
+			"expect": [
+				{
+					"kind": "check",
+					"script": "grade.js"
+				}
+			]
+		},
+		{
+			"id": "remove-dead-code",
+			"category": "refactor",
+			"prompt": "shapes.js has functions nothing uses. Remove every function that is not reachable from the exported area() function, and keep area() working.",
+			"files": {
+				"shapes.js": "function square(s) { return s * s; }\nfunction circle(r) { return Math.PI * r * r; }\nfunction triangleOld(b, h) { return b * h; }\nfunction legacyPerimeter(s) { return 4 * s; }\nfunction area(shape) {\n\treturn shape.kind === 'square' ? square(shape.size) : circle(shape.size);\n}\nmodule.exports = { area };\n"
+			},
+			"hidden": {
+				"grade.js": "const assert = require('assert');\nconst fs = require('fs');\nconst s = fs.readFileSync('shapes.js', 'utf8');\nassert.ok(!s.includes('triangleOld') && !s.includes('legacyPerimeter'), 'dead code left');\nconst { area } = require('./shapes.js');\nassert.strictEqual(area({ kind: 'square', size: 3 }), 9);\nassert.ok(Math.abs(area({ kind: 'circle', size: 1 }) - Math.PI) < 1e-9);\nconsole.log('ok');\n"
+			},
+			"maxSteps": 16,
+			"expect": [
+				{
+					"kind": "check",
+					"script": "grade.js"
+				}
+			]
+		}
+	]
+}

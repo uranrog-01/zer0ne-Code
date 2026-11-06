@@ -1,0 +1,15 @@
+/* Fixed light text in styles.css takes zer0ne code's theme colour (the page was drawn for dark backgrounds). */
+:root[data-host="zer0ne"] .brand-name { color: var(--text); }
+:root[data-host="zer0ne"] .scan-banner-title { color: var(--text); }
+:root[data-host="zer0ne"] .select-wrapper select,
+:root[data-host="zer0ne"] #hfSort { color: var(--text); }
+:root[data-host="zer0ne"] .select-wrapper select:hover,
+:root[data-host="zer0ne"] #hfSort:hover { color: var(--text); }
+:root[data-host="zer0ne"] .select-wrapper select option,
+:root[data-host="zer0ne"] #hfSort option { color: var(--text); }
+:root[data-host="zer0ne"] .mcard-name { color: var(--text); }
+:root[data-host="zer0ne"] .mcard-stats b { color: var(--text); }
+:root[data-host="zer0ne"] .btn-hf-pill:hover { color: var(--text); }
+:root[data-host="zer0ne"] .modal-head h2 { color: var(--text); }
+:root[data-host="zer0ne"] .modal-close-btn:hover { color: var(--text); }
+:root[data-host="zer0ne"] .gsi-text b { color: var(--text); }

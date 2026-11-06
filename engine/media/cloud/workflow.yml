@@ -1,0 +1,97 @@
+# zer0ne cloud tasks — the zer0ne agent in a GitHub Actions VM.
+# Added by zer0ne coding (Settings → Cloud tasks). Needs the repository secret
+# ZER0NE_API_KEY (your model provider's key). Inputs never reach a shell
+# directly: they are passed as environment variables.
+name: zer0ne cloud task
+run-name: "zer0ne · ${{ inputs.session }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: What the agent should do
+        required: true
+        type: string
+      session:
+        description: Task id (from zer0ne coding)
+        required: true
+        type: string
+      model:
+        required: true
+        type: string
+      base_url:
+        required: true
+        type: string
+      api_format:
+        required: false
+        type: string
+        default: openai
+      branch:
+        description: Continue on this branch (empty = new zer0ne/<session> branch)
+        required: false
+        type: string
+        default: ""
+      open_pr:
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: zer0ne-${{ inputs.session }}
+  cancel-in-progress: false
+
+jobs:
+  agent:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch || github.ref }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup script (.zer0ne/cloud/setup.sh)
+        if: hashFiles('.zer0ne/cloud/setup.sh') != ''
+        run: bash .zer0ne/cloud/setup.sh
+
+      - name: Run the zer0ne agent
+        env:
+          ZER0NE_API_KEY: ${{ secrets.ZER0NE_API_KEY }}
+          ZER0NE_TASK: ${{ inputs.task }}
+          ZER0NE_MODEL: ${{ inputs.model }}
+          ZER0NE_BASE_URL: ${{ inputs.base_url }}
+          ZER0NE_FORMAT: ${{ inputs.api_format }}
+          ZER0NE_OUT: ${{ runner.temp }}/zer0ne
+        run: node .zer0ne/cloud/runner.mjs
+
+      - name: Push the branch and open a pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SESSION: ${{ inputs.session }}
+          BRANCH_IN: ${{ inputs.branch }}
+          OPEN_PR: ${{ inputs.open_pr }}
+          OUT: ${{ runner.temp }}/zer0ne
+        run: |
+          BRANCH="${BRANCH_IN:-zer0ne/$SESSION}"
+          git config user.name "zer0ne cloud"
+          git config user.email "zer0ne-cloud@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "ZER0NE_RESULT no-changes"
+            exit 0
+          fi
+          git commit -F "$OUT/commit.txt"
+          git push -u origin "$BRANCH" --force-with-lease
+          echo "ZER0NE_RESULT pushed $BRANCH"
+          if [ "$OPEN_PR" = "true" ] && [ -z "$(gh pr list --head "$BRANCH" --json number -q '.[0].number')" ]; then
+            gh pr create --head "$BRANCH" --title "$(cat "$OUT/title.txt")" --body-file "$OUT/summary.md" || true
+          fi

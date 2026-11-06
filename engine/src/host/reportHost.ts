@@ -1,0 +1,221 @@
+import * as os from 'os';
+import { REDACTED, redactSecrets, DETECTOR_IDS } from '../tools/redact';
+import { EGRESS_TABLE } from '../core/egress';
+import type { HostContext, HostFeature, HostSurface } from './context';
+import type { HealthItem } from './featuresHealth';
+
+/**
+ * Report a problem: a diagnostics report the user reads first, then copies
+ * or pastes into a GitHub issue. Nothing is sent anywhere by itself. Keys,
+ * tokens, the home folder and URL paths are removed before it is shown.
+ */
+export interface ReportInput {
+	hostName?: string;
+	version: string;
+	vscodeVersion: string;
+	platform: string;
+	release: string;
+	arch: string;
+	cpu?: string;
+	memoryGb?: number;
+	locale?: string;
+	providers: Array<{ name: string; apiFormat: string; preset?: string; auth?: string; enabled: boolean; models: number; baseUrl?: string }>;
+	selected?: string;
+	health?: HealthItem[];
+	engine?: Record<string, unknown>;
+	errors: Array<{ at: number; message: string }>;
+	settings?: Record<string, unknown>;
+	note?: string;
+}
+
+/** Secrets and personal paths out of any text (pure; tested). */
+export function redact(text: string, home = os.homedir(), user = safeUser()): string {
+	// Provider key shapes, private keys, JWTs, auth headers, URL credentials and
+	// name-safe JSON fields come from the shared engine (both tiers). Reports add
+	// their own stronger catches because a human reads the output and code
+	// fidelity matters less here than in model context.
+	let s = redactSecrets(String(text), { tier: 'both' }).text.split(REDACTED).join('[redacted]')
+		// Report-only catches: xai-… / aa_… prefixes and key=value by *name* (any case),
+		// which the engine leaves alone to keep source code readable.
+		.replace(/\b(?:xai-|aa_)[A-Za-z0-9_-]{14,}/g, '[redacted]')
+		.replace(/\b(Bearer|Basic|token|api[_-]?key|x-api-key|password|secret|passwd|credential)(["'\s:=]+)([^\s"',;]{6,})/gi, '$1$2[redacted]')
+		// Long opaque strings (40+ chars of key alphabet) are almost always credentials.
+		.replace(/\b[A-Za-z0-9_-]{40,}\b/g, '[redacted]');
+	if (home && home.length > 3) for (const h of [home, home.replace(/\\/g, '/'), home.replace(/\\/g, '\\\\')]) s = s.split(h).join('~');
+	if (user && user.length > 2) s = s.replace(new RegExp(`\\b${user.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi'), '<user>');
+	return s;
+}
+
+function safeUser(): string {
+	try {
+		return os.userInfo().username;
+	} catch {
+		return '';
+	}
+}
+
+/** Only where a provider points, never its path, query or credentials: "https://api.example.com", "local :11434". */
+export function endpointOf(url?: string): string {
+	if (!url) return '';
+	try {
+		const u = new URL(url);
+		if (/^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)$/i.test(u.hostname)) return `local :${u.port || (u.protocol === 'https:' ? 443 : 80)}`;
+		if (/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(u.hostname) || u.hostname.endsWith('.local')) return 'private network';
+		return `${u.protocol}//${u.hostname}`;
+	} catch {
+		return 'custom';
+	}
+}
+
+/** The report as markdown (pure; tested). */
+export function buildReport(r: ReportInput): string {
+	const lines: string[] = [];
+	lines.push('## What happened', '', r.note?.trim() || '<!-- Describe what you did, what you expected and what happened instead. -->', '');
+	lines.push('## Environment', '');
+	lines.push(r.hostName === 'zer0ne Code' ? `- zer0ne Code · coding engine ${r.version}` : `- zer0ne coding ${r.version} · VS Code ${r.vscodeVersion}`);
+	lines.push(`- ${r.platform} ${r.release} (${r.arch})${r.cpu ? ` · ${r.cpu}` : ''}${r.memoryGb ? ` · ${r.memoryGb} GB RAM` : ''}${r.locale ? ` · ${r.locale}` : ''}`);
+	if (r.selected) lines.push(`- Model in use: ${r.selected}`);
+	lines.push('', '## Providers', '');
+	if (!r.providers.length) lines.push('- none configured');
+	for (const p of r.providers) lines.push(`- ${p.name} — ${p.apiFormat}${p.preset ? ` · ${p.preset}` : ''}${p.auth ? ` · ${p.auth}` : ''} · ${p.models} model${p.models === 1 ? '' : 's'}${p.enabled ? '' : ' · disabled'}${p.baseUrl ? ` · ${endpointOf(p.baseUrl)}` : ''}`);
+	if (r.health?.length) {
+		lines.push('', '## Setup check', '');
+		const mark = { ok: '✓', warn: '!', fail: '✗', off: '–' } as const;
+		for (const h of r.health) lines.push(`- ${mark[h.state]} ${h.label}: ${h.detail}`);
+	}
+	if (r.engine && Object.keys(r.engine).length) {
+		lines.push('', '## zer0ne Engine', '', '```json', JSON.stringify(r.engine, null, 2), '```');
+	}
+	lines.push('', '## Recent errors', '');
+	if (!r.errors.length) lines.push('- none in this session');
+	for (const e of r.errors.slice(-15)) lines.push(`- ${new Date(e.at).toISOString().slice(11, 19)} ${e.message.replace(/\s+/g, ' ').slice(0, 400)}`);
+	if (r.settings && Object.keys(r.settings).length) {
+		lines.push('', '<details><summary>Settings that change behaviour</summary>', '', '```json', JSON.stringify(r.settings, null, 2), '```', '</details>');
+	}
+	lines.push('', '---', '_Generated by zer0ne coding → Report a problem. Keys, tokens, your home folder and user name were removed; read it before sharing._');
+	return redact(lines.join('\n'));
+}
+
+/** A GitHub "new issue" link with the report prefilled (URLs stay under GitHub's ~8 KB limit). */
+export function issueLink(base: string, title: string, body: string): string {
+	const url = base.replace(/\/+$/, '').replace(/\/issues(\/new)?$/, '') + '/issues/new';
+	let text = body;
+	const make = () => `${url}?title=${encodeURIComponent(title)}&body=${encodeURIComponent(text)}`;
+	while (make().length > 7500 && text.length > 200) text = text.slice(0, Math.floor(text.length * 0.8)) + '\n\n_(shortened — paste the full report from the editor)_';
+	return make();
+}
+
+export interface ReportSources {
+	version: string;
+	vscodeVersion: string;
+	/** Where the periodic caches live (finder, Intelligence) — for the Trust page's "copies kept on disk". */
+	storageDir?: string;
+	health(): Promise<HealthItem[]>;
+	engine(): Record<string, unknown> | undefined;
+	errors(): Array<{ at: number; message: string }>;
+	/** Show the report to the user (an editor tab); they review it, then copy it or open an issue titled 	itle. */
+	show(text: string, title: string): Promise<void>;
+}
+
+// ------------------------------------------------------------ trust page
+
+/** One declared egress row (host + plain-language purpose). */
+export interface TrustRow {
+	host: string;
+	purpose: string;
+}
+
+export interface TrustData {
+	/** The model traffic you configured, deduplicated by endpoint. */
+	providers: Array<{ endpoint: string; names: string[] }>;
+	/** Nonessential families — grouped so the page can say per group whether the switch skips them. */
+	catalog: TrustRow[];
+	feeds: TrustRow[];
+	/** Services the user turned on themselves: never skippable from here, so the switch never blocks them. */
+	bridges: TrustRow[];
+	/** The redaction engine's detector count (tiered; see src/tools/redact.ts). */
+	detectors: number;
+	/** Non-empty deny-path patterns (Settings → Agent); zero means no deny rule is protecting the workspace. */
+	denyRules: number;
+}
+
+export function familyRows(family: 'catalog' | 'feeds' | 'bridge', table: readonly { match: string; family: string; purpose: string }[] = EGRESS_TABLE): TrustRow[] {
+	return table
+		.filter((e) => e.family === family)
+		.map((e) => ({ host: e.match.split('/')[0], purpose: e.purpose }));
+}
+
+/** The settings keys worth seeing in a bug report (no free text, no paths). */
+const SETTING_KEYS = ['mode', 'autoCompact', 'compactThreshold', 'compactMaxTokens', 'exactHistory', 'tokenSaver', 'deferTools', 'cacheWarm', 'subagents', 'sandbox', 'localTuned', 'localHelperTasks', 'commandTool', 'browserAgent', 'mcp', 'language', 'redactSecrets', 'disableNonessentialNetwork'];
+
+export class ReportHost implements HostFeature {
+	constructor(
+		private readonly ctx: HostContext,
+		private readonly src: ReportSources
+	) {}
+
+	async handle(surface: HostSurface, msg: { type: string; [k: string]: unknown }): Promise<boolean> {
+		if (msg.type === 'trustLoad') {
+			surface.post({ type: 'trustData', ...(await this.trust()) });
+			return true;
+		}
+		if (msg.type !== 'reportProblem') return false;
+		await this.report(typeof msg.note === 'string' ? msg.note : undefined);
+		return true;
+	}
+
+	/** Trust page payload: the honest inventory of what talks where, what is masked, what is kept. */
+	async trust(): Promise<TrustData> {
+		const list = await this.ctx.store.list().catch(() => []);
+		const byEndpoint = new Map<string, string[]>();
+		for (const p of list) {
+			if (!p.enabled) continue;
+			const endpoint = endpointOf(p.baseUrl);
+			const names = (byEndpoint.get(endpoint) ?? []).concat(p.name);
+			byEndpoint.set(endpoint, names);
+		}
+		const s = this.ctx.store.getSettings() as { denyPaths?: string };
+		return {
+			providers: [...byEndpoint].map(([endpoint, names]) => ({ endpoint, names })),
+			catalog: familyRows('catalog'),
+			feeds: familyRows('feeds'),
+			bridges: familyRows('bridge'),
+			detectors: DETECTOR_IDS.length,
+			denyRules: String(s.denyPaths || '')
+				.split('\n')
+				.filter(Boolean).length
+		};
+	}
+
+	async collect(note?: string): Promise<string> {
+		const store = this.ctx.store;
+		const providers = await store.list().catch(() => []);
+		const sel = await store.resolveSelection().catch(() => ({}) as { provider?: { name: string }; model?: { id: string } });
+		const s = store.getSettings() as unknown as Record<string, unknown>;
+		const cpus = os.cpus();
+		return buildReport({
+			hostName: (await import('vscode')).env?.appName,
+			version: this.src.version,
+			vscodeVersion: this.src.vscodeVersion,
+			platform: process.platform,
+			release: os.release(),
+			arch: process.arch,
+			cpu: cpus[0]?.model?.trim(),
+			memoryGb: Math.round(os.totalmem() / 1e9),
+			locale: Intl.DateTimeFormat().resolvedOptions().locale,
+			providers: providers.map((p) => ({ name: p.name, apiFormat: p.apiFormat, preset: p.preset, auth: p.auth, enabled: p.enabled, models: p.models.filter((m) => m.enabled).length, baseUrl: p.baseUrl })),
+			selected: sel.provider && sel.model ? `${sel.provider.name} · ${sel.model.id}` : undefined,
+			health: await this.src.health().catch(() => undefined),
+			engine: this.src.engine(),
+			errors: this.src.errors(),
+			settings: Object.fromEntries(SETTING_KEYS.filter((k) => s[k] !== undefined).map((k) => [k, s[k]])),
+			note
+		});
+	}
+
+	async report(note?: string): Promise<void> {
+		const text = await this.collect(note);
+		const first = this.src.errors().at(-1)?.message.replace(/\s+/g, ' ').slice(0, 80);
+		await this.src.show(text, redact(first ? `Problem: ${first}` : 'Problem report'));
+	}
+}

@@ -1,0 +1,86 @@
+{
+	"cases": [
+		{
+			"id": "run-and-report",
+			"category": "shell",
+			"prompt": "Run node version.js and tell me the exact version string it prints.",
+			"files": {
+				"version.js": "console.log('build-' + (6 * 7) + '-' + ['a', 'b'].join(''));\n"
+			},
+			"maxSteps": 16,
+			"expect": [
+				{
+					"kind": "reply",
+					"contains": "build-42-ab"
+				},
+				{
+					"kind": "tool",
+					"name": "run_command",
+					"min": 1
+				}
+			]
+		},
+		{
+			"id": "generate-file-from-script",
+			"category": "shell",
+			"prompt": "Run gen.js; it writes out.txt. Then tell me how many lines out.txt has.",
+			"files": {
+				"gen.js": "require('fs').writeFileSync('out.txt', Array.from({ length: 17 }, (_, i) => 'line ' + i).join('\\n') + '\\n');\n"
+			},
+			"maxSteps": 16,
+			"expect": [
+				{
+					"kind": "file",
+					"path": "out.txt",
+					"contains": "line 16"
+				},
+				{
+					"kind": "reply",
+					"matches": "(^|\\D)17(\\D|$)"
+				}
+			]
+		},
+		{
+			"id": "fix-until-green",
+			"category": "shell",
+			"prompt": "Run node test.js, fix the failures in lib.js until it passes, and confirm the final output.",
+			"files": {
+				"lib.js": "exports.upper = (s) => s.toLowerCase();\nexports.words = (s) => s.split(',');\n",
+				"test.js": "const assert = require('assert');\nconst l = require('./lib.js');\nassert.strictEqual(l.upper('ab'), 'AB');\nassert.deepStrictEqual(l.words('a b  c'), ['a', 'b', 'c']);\nconsole.log('ALL GREEN');\n"
+			},
+			"hidden": {
+				"grade.js": "const assert = require('assert');\nconst l = require('./lib.js');\nassert.strictEqual(l.upper('xY'), 'XY');\nassert.deepStrictEqual(l.words(' one  two '), ['one', 'two']);\nconsole.log('ok');\n"
+			},
+			"maxSteps": 16,
+			"expect": [
+				{
+					"kind": "check",
+					"script": "grade.js"
+				},
+				{
+					"kind": "reply",
+					"contains": "ALL GREEN"
+				}
+			]
+		},
+		{
+			"id": "package-script",
+			"category": "shell",
+			"prompt": "Add an npm script named \"check\" to package.json that runs node check.js. Do not add dependencies.",
+			"files": {
+				"package.json": "{\n  \"name\": \"demo\",\n  \"version\": \"1.0.0\",\n  \"scripts\": {\n    \"start\": \"node index.js\"\n  }\n}\n",
+				"check.js": "console.log('checked');\n"
+			},
+			"hidden": {
+				"grade.js": "const assert = require('assert');\nconst p = JSON.parse(require('fs').readFileSync('package.json', 'utf8'));\nassert.strictEqual(p.scripts.check, 'node check.js');\nassert.strictEqual(p.scripts.start, 'node index.js');\nassert.ok(!p.dependencies && !p.devDependencies, 'dependencies were added');\nconsole.log('ok');\n"
+			},
+			"maxSteps": 16,
+			"expect": [
+				{
+					"kind": "check",
+					"script": "grade.js"
+				}
+			]
+		}
+	]
+}

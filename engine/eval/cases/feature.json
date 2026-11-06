@@ -1,0 +1,130 @@
+{
+	"cases": [
+		{
+			"id": "add-function",
+			"category": "feature",
+			"prompt": "Add a function slugify(text) to strings.js and export it: lowercase, words joined by single hyphens, only a-z and 0-9 kept, no leading or trailing hyphens.",
+			"files": {
+				"strings.js": "function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }\nmodule.exports = { capitalize };\n"
+			},
+			"hidden": {
+				"grade.js": "const assert = require('assert');\nconst s = require('./strings.js');\nassert.strictEqual(s.slugify('Hello World'), 'hello-world');\nassert.strictEqual(s.slugify('  Trim -- me!  '), 'trim-me');\nassert.strictEqual(s.slugify('Version 2.0 Release'), 'version-2-0-release');\nassert.strictEqual(s.capitalize('a'), 'A');\nconsole.log('ok');\n"
+			},
+			"maxSteps": 16,
+			"expect": [
+				{
+					"kind": "check",
+					"script": "grade.js"
+				}
+			]
+		},
+		{
+			"id": "add-option",
+			"category": "feature",
+			"prompt": "formatList in format.js joins items with commas. Add an optional second parameter { conjunction } so formatList([\"a\",\"b\",\"c\"], { conjunction: \"and\" }) returns \"a, b and c\". Without the option it must behave exactly as before.",
+			"files": {
+				"format.js": "function formatList(items) {\n\treturn items.join(', ');\n}\nmodule.exports = { formatList };\n"
+			},
+			"hidden": {
+				"grade.js": "const assert = require('assert');\nconst { formatList } = require('./format.js');\nassert.strictEqual(formatList(['a', 'b', 'c']), 'a, b, c');\nassert.strictEqual(formatList(['a', 'b', 'c'], { conjunction: 'and' }), 'a, b and c');\nassert.strictEqual(formatList(['a', 'b'], { conjunction: 'or' }), 'a or b');\nassert.strictEqual(formatList(['a'], { conjunction: 'and' }), 'a');\nassert.strictEqual(formatList([], { conjunction: 'and' }), '');\nconsole.log('ok');\n"
+			},
+			"maxSteps": 16,
+			"expect": [
+				{
+					"kind": "check",
+					"script": "grade.js"
+				}
+			]
+		},
+		{
+			"id": "add-cli-flag",
+			"category": "feature",
+			"prompt": "cli.js prints a greeting. Add a --shout flag that prints it in upper case. Running node cli.js Ada should still print \"Hello, Ada\".",
+			"files": {
+				"cli.js": "const name = process.argv[2] || 'world';\nconsole.log(`Hello, ${name}`);\n"
+			},
+			"hidden": {
+				"grade.js": "const assert = require('assert');\nconst { execFileSync } = require('child_process');\nconst run = (...a) => execFileSync(process.execPath, ['cli.js', ...a], { encoding: 'utf8', env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } }).trim();\nassert.strictEqual(run('Ada'), 'Hello, Ada');\nassert.strictEqual(run('Ada', '--shout'), 'HELLO, ADA');\nassert.strictEqual(run('--shout', 'Ada'), 'HELLO, ADA');\nconsole.log('ok');\n"
+			},
+			"maxSteps": 16,
+			"expect": [
+				{
+					"kind": "check",
+					"script": "grade.js"
+				}
+			]
+		},
+		{
+			"id": "add-cache",
+			"category": "feature",
+			"prompt": "slowSquare in math.js is expensive. Add an exported memoized version, fastSquare, that calls slowSquare at most once per input.",
+			"files": {
+				"math.js": "let calls = 0;\nfunction slowSquare(n) { calls++; return n * n; }\nfunction callCount() { return calls; }\nmodule.exports = { slowSquare, callCount };\n"
+			},
+			"hidden": {
+				"grade.js": "const assert = require('assert');\nconst m = require('./math.js');\nassert.strictEqual(m.fastSquare(4), 16);\nassert.strictEqual(m.fastSquare(4), 16);\nassert.strictEqual(m.fastSquare(5), 25);\nassert.strictEqual(m.callCount(), 2);\nconsole.log('ok');\n"
+			},
+			"maxSteps": 16,
+			"expect": [
+				{
+					"kind": "check",
+					"script": "grade.js"
+				}
+			]
+		},
+		{
+			"id": "add-validation",
+			"category": "feature",
+			"prompt": "createUser in users.js accepts anything. Make it throw an Error whose message mentions \"name\" when name is missing or empty, and one mentioning \"age\" when age is not an integer between 0 and 150.",
+			"files": {
+				"users.js": "function createUser(name, age) {\n\treturn { name, age };\n}\nmodule.exports = { createUser };\n"
+			},
+			"hidden": {
+				"grade.js": "const assert = require('assert');\nconst { createUser } = require('./users.js');\nassert.deepStrictEqual(createUser('Ada', 36), { name: 'Ada', age: 36 });\nassert.throws(() => createUser('', 3), /name/);\nassert.throws(() => createUser(undefined, 3), /name/);\nassert.throws(() => createUser('Ada', 3.5), /age/);\nassert.throws(() => createUser('Ada', -1), /age/);\nassert.throws(() => createUser('Ada', 151), /age/);\nconsole.log('ok');\n"
+			},
+			"maxSteps": 16,
+			"expect": [
+				{
+					"kind": "check",
+					"script": "grade.js"
+				}
+			]
+		},
+		{
+			"id": "add-json-config",
+			"category": "feature",
+			"prompt": "Make config.js read settings from config.json in the project folder when it exists, falling back to the defaults for missing keys. Keep the exported loadConfig() function.",
+			"files": {
+				"config.js": "const defaults = { port: 3000, host: 'localhost' };\nfunction loadConfig() {\n\treturn { ...defaults };\n}\nmodule.exports = { loadConfig };\n"
+			},
+			"hidden": {
+				"grade.js": "const assert = require('assert');\nconst fs = require('fs');\nconst path = require('path');\nfs.rmSync(path.join(__dirname, 'config.json'), { force: true });\ndelete require.cache[require.resolve('./config.js')];\nassert.deepStrictEqual(require('./config.js').loadConfig(), { port: 3000, host: 'localhost' });\nfs.writeFileSync(path.join(__dirname, 'config.json'), JSON.stringify({ port: 8080 }));\ndelete require.cache[require.resolve('./config.js')];\nassert.deepStrictEqual(require('./config.js').loadConfig(), { port: 8080, host: 'localhost' });\nconsole.log('ok');\n"
+			},
+			"maxSteps": 16,
+			"expect": [
+				{
+					"kind": "check",
+					"script": "grade.js"
+				}
+			]
+		},
+		{
+			"id": "write-tests",
+			"category": "feature",
+			"prompt": "Write tests for range() in range.js in a new file range.test.js using node's assert module. They should pass when run with node range.test.js and fail if range is broken.",
+			"files": {
+				"range.js": "// range(3) -> [0,1,2]; range(2,5) -> [2,3,4]\nfunction range(a, b) {\n\tconst [start, end] = b === undefined ? [0, a] : [a, b];\n\tconst out = [];\n\tfor (let i = start; i < end; i++) out.push(i);\n\treturn out;\n}\nmodule.exports = { range };\n"
+			},
+			"hidden": {
+				"grade.js": "const assert = require('assert');\nconst { spawnSync } = require('child_process');\nconst fs = require('fs');\nconst env = { ...process.env, ELECTRON_RUN_AS_NODE: '1' };\nassert.ok(fs.existsSync('range.test.js'), 'range.test.js missing');\nassert.strictEqual(spawnSync(process.execPath, ['range.test.js'], { env }).status, 0, 'tests fail on the correct range');\nconst good = fs.readFileSync('range.js', 'utf8');\nfs.writeFileSync('range.js', 'module.exports = { range: () => [] };\\n');\nconst broken = spawnSync(process.execPath, ['range.test.js'], { env }).status;\nfs.writeFileSync('range.js', good);\nassert.notStrictEqual(broken, 0, 'tests pass on a broken range');\nconsole.log('ok');\n"
+			},
+			"maxSteps": 16,
+			"expect": [
+				{
+					"kind": "check",
+					"script": "grade.js"
+				}
+			]
+		}
+	]
+}

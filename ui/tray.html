@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>zer0ne Code — Menu</title>
+	<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'">
+	<link rel="stylesheet" href="tray.css">
+</head>
+<body>
+	<div id="panel" class="panel" role="menu" aria-label="zer0ne Code menu">
+		<header class="head">
+			<img class="head-logo" src="logo.svg" alt="" width="20" height="20">
+			<span class="head-name">zer0ne Code</span>
+			<span id="version" class="head-version"></span>
+		</header>
+		<div id="status" class="head-status"><i aria-hidden="true"></i><span>Ready</span></div>
+		<div class="scroll">
+			<section id="nav" class="section">
+				<button type="button" class="row" role="menuitem" data-key="zc:show"><span class="row-ic"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M9.5 3H13v3.5M13 3 8.7 7.3M13 9.5V12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h2.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="row-label">Show zer0ne Code</span></button>
+				<button type="button" class="row" role="menuitem" data-key="zc:new-window"><span class="row-ic"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M2.5 4.5A1.5 1.5 0 0 1 4 3h8a1.5 1.5 0 0 1 1.5 1.5v7A1.5 1.5 0 0 1 12 13H4a1.5 1.5 0 0 1-1.5-1.5zM2.5 6h11M8 8.2v2.6M6.7 9.5h2.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="row-label">New window</span></button>
+				<button type="button" class="row" role="menuitem" data-key="zc:open-project"><span class="row-ic"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M2 5.5A1.5 1.5 0 0 1 3.5 4h2.7L7.8 5.8h4.7A1.5 1.5 0 0 1 14 7.3v5.2a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 12.5z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="row-label">Open project…</span></button>
+				<button type="button" class="row" role="menuitem" data-key="zc:quick"><span class="row-ic"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M8.8 1.8 3.9 8.6h3L6.6 14.2 11.5 7.4h-3z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="row-label">Quick prompt</span><span class="row-hint"><kbd>Ctrl</kbd><i class="plus">+</i><kbd>Alt</kbd><i class="plus">+</i><kbd>Space</kbd></span></button>
+				<button type="button" class="row" role="menuitem" data-key="zc:notch"><span class="row-ic"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M2.5 8a2.2 2.2 0 0 1 2.2-2.2h6.6A2.2 2.2 0 0 1 13.5 8 2.2 2.2 0 0 1 11.3 10.2H4.7A2.2 2.2 0 0 1 2.5 8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="row-label">Agent notch</span><span class="row-hint"><kbd>Ctrl</kbd><i class="plus">+</i><kbd>Alt</kbd><i class="plus">+</i><kbd>Z</kbd></span></button>
+			</section>
+		</div>
+		<footer id="foot" class="section">
+			<button type="button" class="row" role="menuitem" data-key="zc:logs"><span class="row-ic"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M4 2.5h8a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1zM6 6.5h4M6 9h4M6 11.5h2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="row-label">Open logs</span></button>
+			<button type="button" class="row danger" role="menuitem" data-key="zc:quit"><span class="row-ic"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M8 2v6M4.8 4.4a4.7 4.7 0 1 0 6.4 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="row-label">Quit</span></button>
+		</footer>
+	</div>
+	<script src="tray.js"></script>
+</body>
+</html>

@@ -1,0 +1,78 @@
+'use strict';
+const assert = require('node:assert/strict'), path = require('node:path');
+module.exports = async function polishPass(page, shots, until, original) {
+	const files = ['src/deep/main.ts', 'src/other.ts', 'README.md'];
+	await page.send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+	await page.send('Emulation.setEmulatedMedia', { features: [] });
+	await page.eval(`window.__polishPassPost=window.Bridge.post;window.__polishPassCalls=[];window.Bridge.post=message=>{window.__polishPassCalls.push(message);if(message.type==='getFiles')setTimeout(()=>window.dispatchEvent(new MessageEvent('message',{data:{type:'files',files:${JSON.stringify(files)}}})),0);if(message.type==='previewFile')setTimeout(()=>window.dispatchEvent(new MessageEvent('message',{data:{type:'filePreview',sessionId:message.sessionId,path:message.path,content:'export const safe = true;',lines:1,size:25}})),0);};`);
+	const fixture = { ...original, currentSessionId: 'polish-pass', settings: { ...original.settings, theme: 'claude-code', showReasoning: true }, providers: [], selection: {}, messages: [], sessions: [], undoable: [], redoable: [] };
+	const send = value => page.eval('window.dispatchEvent(new MessageEvent("message",{data:' + JSON.stringify(value) + '}))');
+	try {
+		await send(fixture);
+		await until('useful first-chat starting points', () => page.eval(`document.querySelectorAll('.welcome-chip').length===3 && !document.querySelector('.welcome-stats')`));
+		await page.eval(`document.querySelectorAll('.welcome-chip')[2].click()`);
+		assert.match(await page.eval(`document.getElementById('input').value`), /Review the current changes/);
+		assert(await page.eval(`!window.__polishPassCalls.some(call=>call.type==='send')`), 'a starting prompt fills the draft without sending');
+		await page.screenshot(path.join(shots, 'polish-welcome.png'));
+		await page.eval(`window.Settings.open('general');document.querySelector('.settings-search input').value='show reasoning';document.querySelector('.settings-search input').dispatchEvent(new Event('input'));document.querySelector('.settings-search input').focus()`);
+		await until('global settings search results', () => page.eval(`document.querySelector('[role="option"] strong')?.textContent==='Show reasoning'`));
+		await page.screenshot(path.join(shots, 'polish-settings-search.png'));
+		await page.eval(`document.querySelector('.settings-search input').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}))`);
+		assert(await page.eval(`!!document.querySelector('.settings-search-hit #s-showReasoning') && document.activeElement.id==='s-showReasoning'`), 'search opens Message stream and focuses its actual setting');
+		await page.send('Emulation.setDeviceMetricsOverride', { width: 720, height: 900, deviceScaleFactor: 1, mobile: false });
+		assert(await page.eval(`getComputedStyle(document.querySelector('.settings-nav .nav-item span')).display!=='none'`), 'medium-width settings retain readable navigation labels');
+		await page.screenshot(path.join(shots, 'polish-settings-medium.png'));
+		await page.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 760, deviceScaleFactor: 1, mobile: false });
+		await page.eval(`const search=document.querySelector('.settings-search input');search.value='notch';search.dispatchEvent(new Event('input'));search.focus()`);
+		assert(await page.eval(`(()=>{const r=document.querySelector('.settings-search-results').getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&r.bottom<=innerHeight;})()`), 'search fits a narrow viewport');
+		await page.screenshot(path.join(shots, 'polish-settings-narrow.png'));
+		await page.eval(`window.Settings.close()`);
+		await until('settings closes', () => page.eval(`!document.querySelector('.settings-overlay')`));
+		await page.send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+		const messages = [];
+		for (let n = 0; n < 200; n++) messages.push({ id: 'polish-u-' + n, role: 'user', content: 'Inspect module ' + n, turn: { startedAt: 1000, endedAt: 2000, edits: n === 199 ? [{ path: 'src/deep/main.ts', added: 1, removed: 0 }] : [] } }, { id: 'polish-tool-' + n, role: 'assistant', kind: 'tool', content: '', tool: { name: 'read_file', status: 'done', arg: 'src/module-' + n + '.ts', summary: 'Read', detail: 'Content' } }, { id: 'polish-a-' + n, role: 'assistant', content: 'Inspected module ' + n + '.' });
+		const history = { ...fixture, messages, undoable: ['polish-u-199'] };
+		await page.eval(`if(document.getElementById('sidebar').classList.contains('hidden'))document.getElementById('btn-sidebar').click();if(document.getElementById('auxiliary').classList.contains('hidden'))document.getElementById('btn-auxiliary').click();document.getElementById('aux-tab-explorer').click()`);
+		await page.eval(`window.__polishHistoryStart=performance.now()`); await send(history);
+		await until('large history rendered', () => page.eval(`document.querySelectorAll('.worked').length===200`));
+		const duration = await page.eval(`performance.now()-window.__polishHistoryStart`);
+		await page.eval(`window.__polishNodes=[...document.querySelectorAll('.msg')];document.querySelectorAll('.worked-head')[100].click()`);
+		assert(await page.eval(`window.__polishNodes.every(node=>node.classList.contains('worked')&&node.querySelector('[data-toggle="w:polish-u-100"]')?true:node.isConnected)`), 'opening one turn retains every unrelated message node');
+		await page.eval(`document.querySelectorAll('.worked-head')[100].click()`);
+		for (const theme of ['claude-code', 'claude-light']) {
+			await page.eval(`window.applyAppearance({theme:${JSON.stringify(theme)},accent:'clay',glass:false});document.querySelector('.agent-ledger').scrollIntoView({block:'center'})`);
+			const ratio = await page.eval(`(()=>{const node=document.querySelector('.ledger-summary-actions [data-review]'),context=document.createElement('canvas').getContext('2d');function rgb(color){context.clearRect(0,0,1,1);context.fillStyle=color;context.fillRect(0,0,1,1);return [...context.getImageData(0,0,1,1).data].slice(0,3);}function lum(values){const v=values.map(c=>{c/=255;return c<=.04045?c/12.92:((c+.055)/1.055)**2.4});return v[0]*.2126+v[1]*.7152+v[2]*.0722;}const a=lum(rgb(getComputedStyle(node).color)),b=lum(rgb(getComputedStyle(node).getPropertyValue('--color-background')));return (Math.max(a,b)+.05)/(Math.min(a,b)+.05);})()`);
+			assert(ratio >= 4.5, theme + ' active Ledger actions need readable contrast: ' + ratio);
+			const spacing = await page.eval(`document.querySelector('.agent-ledger').getBoundingClientRect().top-document.getElementById('msg-polish-a-199').getBoundingClientRect().bottom`);
+			assert(spacing >= 0 && spacing <= 20, 'change summary remains attached to the answer: ' + spacing);
+			await page.screenshot(path.join(shots, 'polish-chat-' + theme + '.png'));
+		}
+		await page.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
+		assert.equal(await page.eval(`getComputedStyle(document.querySelector('.ledger-chevron')).transitionDuration`), '0s', 'shared motion respects the operating-system preference');
+		await page.send('Emulation.setEmulatedMedia', { features: [] });
+		await page.eval(`document.body.style.setProperty('--zc-aux-w','600px');if(document.getElementById('auxiliary').classList.contains('hidden'))document.getElementById('btn-auxiliary').click();document.getElementById('aux-tab-explorer').click()`);
+		await until('breadcrumb fixture files', () => page.eval(`!!document.querySelector('[data-aux-tree-dir="src"]')`));
+		await page.eval(`document.querySelector('[data-aux-tree-dir="src"]').click();document.querySelector('[data-aux-tree-dir="src/deep"]').click();document.querySelector('[data-aux-open-file="src/deep/main.ts"]').click()`);
+		await until('breadcrumb preview', () => page.eval(`document.querySelector('.explorer-breadcrumbs')?.textContent.includes('main.ts') && document.querySelector('.fsp-body')?.textContent.includes('safe')`));
+		await page.eval(`document.body.style.setProperty('--zc-aux-w','600px')`);
+		const navigation = await page.eval(`({width:document.getElementById('auxiliary').getBoundingClientRect().width,container:getComputedStyle(document.getElementById('auxiliary')).containerName,fonts:['aux-tab-explorer','aux-tab-files','aux-tab-terminal'].map(id=>getComputedStyle(document.getElementById(id)).fontSize)})`);
+		assert(navigation.width >= 420 && navigation.fonts.every(font => parseFloat(font) > 0), 'wide Work Details labels the frequent destinations: ' + JSON.stringify(navigation));
+		await page.screenshot(path.join(shots, 'polish-explorer-breadcrumbs.png'));
+		await page.eval(`document.querySelector('[data-aux-breadcrumb="src"]').click()`);
+		assert(await page.eval(`document.activeElement.dataset.auxTreeDir==='src' && !document.querySelector('.explorer-breadcrumbs')`), 'a breadcrumb returns to the selected folder in the tree');
+		await send({ ...fixture, messages: [{ id: 'failed-u', role: 'user', content: 'Check project', turn: { startedAt: 1, endedAt: 2 } }, { id: 'failed-command', role: 'assistant', kind: 'tool', content: '', approval: { id: 'failed-command-approval', kind: 'command', status: 'applied', execution: 'error', command: 'npm test', result: 'Exit 1' } }, { id: 'failed-mcp', role: 'assistant', kind: 'tool', content: '', tool: { name: 'mcp__service__update', arg: 'Update record', status: 'error', summary: 'Connection failed', detail: '<denied>', externalAction: true } }, { id: 'failed-response', role: 'assistant', isError: true, content: '429 rate limit reached' }] });
+		await until('response recovery guidance', () => page.eval(`!!document.querySelector('.msg.error .recovery-note [data-open-settings="usage"]')`));
+		await page.eval(`document.querySelector('.worked-head').click()`);
+		const recovery = await page.eval(`({terminal:!!document.querySelector('[data-recovery-panel="terminal"]'),mcp:!!document.querySelector('.worked [data-open-settings="mcp"]'),text:document.querySelector('.worked')?.textContent,errors:window.__polishErrors})`);
+		assert(recovery.terminal && recovery.mcp, 'command and MCP failures provide relevant destinations: ' + JSON.stringify(recovery));
+		await page.eval(`document.querySelector('[data-recovery-panel="terminal"]').click()`);
+		assert(await page.eval(`document.getElementById('aux-tab-terminal').getAttribute('aria-selected')==='true'`));
+		assert(await page.eval(`!window.__polishPassCalls.some(call=>['send','retry','runCommand'].includes(call.type))`), 'inspection and recovery controls do not replay failed work');
+		assert(await page.eval(`(()=>{const card=document.querySelector('.error-card'),r=card.getBoundingClientRect();return [...card.querySelectorAll('button')].every(button=>{const b=button.getBoundingClientRect();return b.left>=r.left&&b.right<=r.right+1;});})()`), 'recovery actions wrap inside a narrow chat column');
+		await page.screenshot(path.join(shots, 'polish-recovery.png'));
+		console.log('Polish pass: search, keyboard/IME coverage, contrast, spacing, breadcrumbs, recovery and 200-turn DOM retention passed; history ready in ' + Math.round(duration) + 'ms.');
+	} finally {
+		await page.eval(`window.Settings.close();window.Bridge.post=window.__polishPassPost;delete window.__polishPassPost;document.body.style.removeProperty('--zc-aux-w');delete window.__polishNodes;document.getElementById('input').value='';document.getElementById('input').dispatchEvent(new Event('input'))`);
+		await send(original);
+	}
+};

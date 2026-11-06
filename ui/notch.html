@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>zer0ne Code — Notch</title>
+	<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'">
+	<link rel="stylesheet" href="notch.css">
+</head>
+<body>
+	<div id="notch" class="notch" data-mode="rest" hidden>
+		<span class="edge" aria-hidden="true"></span>
+		<div class="compact">
+			<span class="glyph" aria-hidden="true"></span>
+			<span class="label" role="status" aria-live="polite"></span>
+			<span class="meta"></span>
+			<span class="badge" hidden></span>
+		</div>
+		<div class="expanded">
+			<div class="head">
+				<img class="logo" src="logo.svg" alt="" width="18" height="18">
+				<span class="brand">zer0ne</span>
+				<span class="summary"></span>
+				<button type="button" class="icon-btn" data-act="ask-copied" title="Ask about what you copied" aria-label="Ask about what you copied" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 3.5h-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1M6 2.5h4v2H6z"/></svg></button>
+				<button type="button" class="icon-btn" data-act="pin" title="Pin: keep open, use the keyboard and drop files here" aria-label="Pin the notch open" aria-pressed="false" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2.5h4l-.6 3.5 2.1 2v1.5h-7V8l2.1-2zM8 9.5v4"/></svg></button>
+				<button type="button" class="icon-btn" data-act="app" title="Open zer0ne" aria-label="Open zer0ne"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 4h6v6M12 4l-7.5 7.5"/></svg></button>
+			</div>
+			<form class="asker" hidden>
+				<div class="asker-files"></div>
+				<div class="asker-row">
+					<input class="asker-input" type="text" maxlength="8000" placeholder="Ask about it…" aria-label="What to ask about it" autocomplete="off" spellcheck="false">
+					<button type="submit" class="btn primary">Ask</button>
+				</div>
+				<div class="asker-chips">
+					<button type="button" class="chip" data-ask="Fix the problem this shows.">Fix this</button>
+					<button type="button" class="chip" data-ask="Explain what this means.">Explain this</button>
+					<button type="button" class="chip" data-act="ask-cancel">Cancel</button>
+				</div>
+			</form>
+			<div class="drop-hint" hidden>Drop files, images or text here to ask about them</div>
+			<div class="runs"></div>
+			<div class="recent">
+				<div class="sec">
+					<span>Notifications</span>
+					<button type="button" class="link" data-act="read-all">Mark all read</button>
+				</div>
+				<div class="notes"></div>
+			</div>
+			<div class="empty">
+				<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 8.4l2.6 2.6L12 5.5"/></svg>
+				<span>All caught up</span>
+			</div>
+		</div>
+	</div>
+	<script src="notch.js"></script>
+</body>
+</html>

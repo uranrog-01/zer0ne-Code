@@ -1,0 +1,150 @@
+{
+	"name": "zer0ne-code",
+	"productName": "zer0ne Code",
+	"version": "0.3.0",
+	"private": true,
+	"description": "zer0ne Code: a desktop coding agent for project folders.",
+	"author": "zer0ne",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/uranrog-01/zer0ne-Code.git"
+	},
+	"homepage": "https://github.com/uranrog-01/zer0ne-Code#readme",
+	"bugs": {
+		"url": "https://github.com/uranrog-01/zer0ne-Code/issues"
+	},
+	"main": "app/main.js",
+	"scripts": {
+		"prestart": "node scripts/prepare-runtime.js",
+		"predev": "node scripts/prepare-runtime.js",
+		"engine": "node scripts/build-engine.js",
+		"start": "npm run engine && electron .",
+		"dev": "electron .",
+		"host": "node host/main.js --standalone",
+		"check": "node node_modules/typescript/bin/tsc -p engine --noEmit && node engine/scripts/check-media.js && node scripts/check-app.js && node scripts/check-architecture.js && npm run lint",
+		"lint": "biome lint app host ui scripts test engine/src engine/scripts engine/test engine/media engine/vscode-shim.js",
+		"pretest": "npm run engine",
+		"test": "node test/run.js",
+		"pretest:engine": "npm run engine",
+		"test:engine": "node engine/test/run.js",
+		"test:live": "node engine/test/run.js --live",
+		"validate": "node scripts/validate.js",
+		"dist": "npm run engine && node scripts/package.js",
+		"installer": "node scripts/installer.js",
+		"release": "node scripts/release.js",
+		"benchmark": "node scripts/benchmark.js",
+		"agent": "node host/main.js --headless",
+		"evals": "node scripts/run-evals.js",
+		"mcp": "node host/mcp-server.js"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.5.15",
+		"@electron/asar": "3.4.1",
+		"@electron/fuses": "1.8.0",
+		"@types/node": "22.20.4",
+		"@types/vscode": "1.95.0",
+		"electron": "44.9.3",
+		"electron-builder": "26.15.3",
+		"esbuild": "0.28.2",
+		"js-yaml": "4.3.2",
+		"jsdom": "30.1.0",
+		"typescript": "7.1.0-beta",
+		"typescript-classic": "npm:typescript@5.9.3"
+	},
+	"overrides": {
+		"minimatch@>=7.0.0 <11.0.1": "11.0.4"
+	},
+	"build": {
+		"afterPack": "scripts/after-pack.js",
+		"appId": "dev.zer0ne.code.electron",
+		"productName": "zer0ne Code",
+		"executableName": "zer0ne Code",
+		"directories": {
+			"output": "dist"
+		},
+		"asar": true,
+		"npmRebuild": false,
+		"electronFuses": {
+			"runAsNode": true,
+			"enableCookieEncryption": true,
+			"enableNodeOptionsEnvironmentVariable": false,
+			"enableNodeCliInspectArguments": false,
+			"enableEmbeddedAsarIntegrityValidation": true,
+			"onlyLoadAppFromAsar": true
+		},
+		"files": [
+			"package.json",
+			"LICENSE",
+			"CHANGELOG.md",
+			"THIRD_PARTY_NOTICES.md",
+			"app/**",
+			"host/**",
+			"ui/**",
+			"assets/icon.png",
+			"assets/icon.ico",
+			"assets/loadingbanner.png",
+			"engine/package.json",
+			"engine/engine.json",
+			"engine/vscode-shim.js",
+			"engine/LICENSE",
+			"engine/THIRD_PARTY_NOTICES.md",
+			"engine/out/**",
+			"engine/media/**",
+			"engine/eval/cases/**",
+			"engine/eval/judge/**",
+			"engine/bin/${platform}-${arch}/**",
+			"!engine/bin/**/zer0ne-tools*",
+			"!engine/media/Inspiration*",
+			"!engine/media/sandbox/*.exe",
+			"!engine/media/logo01.jpg",
+			"!**/*.map"
+		],
+		"win": {
+			"target": "dir",
+			"icon": "assets/icon.ico",
+			"signExts": [
+				"!llmfit.exe"
+			]
+		},
+		"nsis": {
+			"oneClick": false,
+			"perMachine": false,
+			"allowElevation": true,
+			"packElevateHelper": false,
+			"selectPerMachineByDefault": false,
+			"allowToChangeInstallationDirectory": true,
+			"createDesktopShortcut": true,
+			"createStartMenuShortcut": true,
+			"shortcutName": "zer0ne Code",
+			"uninstallDisplayName": "zer0ne Code",
+			"menuCategory": "zer0ne",
+			"license": "LICENSE",
+			"installerIcon": "assets/icon.ico",
+			"uninstallerIcon": "assets/icon.ico",
+			"installerSidebar": "assets/installer/sidebar.bmp",
+			"uninstallerSidebar": "assets/installer/sidebar.bmp",
+			"installerHeader": "assets/installer/header.bmp",
+			"runAfterFinish": true,
+			"deleteAppDataOnUninstall": false,
+			"differentialPackage": false,
+			"warningsAsErrors": true,
+			"artifactName": "zer0ne-Code-Setup-${version}.${ext}"
+		},
+		"electronLanguages": [
+			"en-US"
+		],
+		"beforePack": "scripts/before-pack.js",
+		"asarUnpack": [
+			"host/**",
+			"engine/**",
+			"ui/**",
+			"assets/**",
+			"app/desktop-ui.js",
+			"app/desktop-glass.js",
+			"app/computer-overlay.cs",
+			"app/workers/**",
+			"app/wallpaper.js"
+		]
+	}
+}

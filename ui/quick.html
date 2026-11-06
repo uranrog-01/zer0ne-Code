@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>zer0ne Code — Quick prompt</title>
+	<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'">
+	<link rel="stylesheet" href="quick.css">
+</head>
+<body>
+	<form id="quick" class="quick" autocomplete="off">
+		<div class="quick-row">
+			<img class="quick-logo" src="logo.svg" alt="" width="20" height="20">
+			<textarea id="prompt" rows="1" placeholder="Ask zer0ne anything…" aria-label="Quick prompt" maxlength="20000"></textarea>
+			<button id="send" type="submit" class="quick-send" aria-label="Send" disabled>
+				<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M8 13V3M3.5 7.5 8 3l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+			</button>
+		</div>
+		<div class="quick-foot">
+			<span id="target" class="quick-target"><i aria-hidden="true"></i><span>No project open</span></span>
+			<span id="note" class="quick-note" role="status" aria-live="polite"></span>
+			<span class="quick-keys"><kbd>Enter</kbd> send <kbd>Shift</kbd>+<kbd>Enter</kbd> new line <kbd>Esc</kbd> close</span>
+		</div>
+	</form>
+	<script src="quick.js"></script>
+</body>
+</html>

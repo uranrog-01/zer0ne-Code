@@ -1,0 +1,74 @@
+// Runs the offline test suites in order: `npm test`.
+// Live suites (network / real Chrome) run separately: `npm run test:live`.
+const { spawnSync } = require('child_process');
+const path = require('path');
+require('../../test/gui-lock').acquire();
+const { testEnv } = require('../../test/test-env');
+
+const live = process.argv.includes('--live');
+const suites = live ? ['web.test.js', 'browser.test.js'] : ['eval-harness.test.js', 'mcp-server.test.js', 'harness-features.test.js', 'client.test.js', 'controller.test.js', 'remote.test.js', 'artifact-host.test.js', 'units.test.js', 'whisper.test.js', 'features.test.js', 'history-ui.test.js', 'question-ui.test.js', 'usage.test.js'];
+if (!live) suites.push('recorder.test.js', 'settings-capabilities.test.js', 'projects.test.js', 'worktrees-host.test.js', 'terminal-host.test.js', 'terminal-ui.test.js', 'workspace-host.test.js', 'queue-uploads.test.js', 'navigation-ui.test.js', 'markup-sync.test.js');
+if (!live) suites.push('subagent-monitor.test.js', 'subagent-monitor-ui.test.js', 'subagent-workflow.test.js');
+if (!live) suites.push('explorer-ui.test.js');
+if (!live) suites.push('chat-branch-ui.test.js');
+if (!live) suites.push('setup-ui.test.js');
+if (!live) suites.push('provider-safety.test.js');
+if (!live) suites.push('workflow-history-ui.test.js');
+if (!live) suites.push('polish-pass.test.js');
+if (!live) suites.push('hooks-memory-ui.test.js');
+if (!live) suites.push('appearance-ui.test.js');
+if (!live) suites.push('cloud-ui.test.js');
+if (!live) suites.push('hardening.test.js');
+if (!live) suites.push('upgrade.test.js');
+if (!live) suites.push('mcp-app-lifecycle.test.js');
+if (!live) suites.push('composer-drafts.test.js');
+if (!live) suites.push('browser-upgrade.test.js');
+if (!live) suites.push('computer.test.js','computer-ui.test.js');
+if (!live) suites.push('writer-workflow.test.js');
+if (!live) suites.push('change-review.test.js');
+if (!live) suites.push('streaming-message.test.js');
+if (!live) suites.push('workbench.test.js');
+if (!live) suites.push('review-upgrade.test.js');
+if (!live) suites.push('local-catalog.test.js', 'model-fit.test.js', 'fit-rule.test.js', 'suggest.test.js', 'quality.test.js', 'engine-speed.test.js', 'storage-sweep.test.js', 'modelfit-host.test.js', 'model-discovery.test.js', 'model-browser-ui.test.js', 'local-experience.test.js', 'local-model-safety-ui.test.js');
+if (!live) suites.push();
+if (!live) suites.push('harness-accounting.test.js', 'harness-usage-ui.test.js');
+if (!live) suites.push('session-stats-ui.test.js');
+if (!live) suites.push('side-chat.test.js', 'side-chat-ui.test.js', 'agent-ledger.test.js');
+if (!live) suites.push('extension-catalog.test.js', 'turn-recovery.test.js');
+if (!live) suites.push('harness-runtime.test.js', 'edit-safety.test.js', 'compaction.test.js', 'goal.test.js', 'turn-trace.test.js', 'benchmark-host.test.js', 'repo-map.test.js', 'learning-loop.test.js');
+if (!live) suites.push('harness-audit.test.js');
+if (!live) suites.push('background-work.test.js');
+if (!live) suites.push('task-evidence.test.js');
+if (!live) suites.push('command-permissions.test.js');
+if (!live) suites.push('session-tool-regressions.test.js');
+if (!live) suites.push('image-generate.test.js');
+if (!live) suites.push('command-input.test.js', 'command-rule-reasons.test.js', 'context-budget.test.js', 'agent-docs.test.js', 'sandbox-deny-read.test.js');
+if (!live) suites.push('prefix-cache.test.js');
+if (!live) suites.push('cache-warmer.test.js');
+if (!live) suites.push('mcp-regressions.test.js', 'plugins-skills-regressions.test.js');
+if (!live) suites.push('agents-regressions.test.js');
+if (!live) suites.push('provider-integration.test.js');
+if (!live) suites.push('model-switching.test.js');
+if (!live) suites.push('harness-capability.test.js');
+if (!live) suites.push('features-dashboard.test.js');
+if (!live) suites.push('features-browser.test.js');
+if (!live) suites.push('features-audit.test.js');
+if (!live) suites.push('local-hardware-router.test.js');
+if (!live) suites.push('local-router-protocols.test.js');
+if (!live) suites.push('hf-rate-limit.test.js');
+if (!live) suites.push('subscription-oauth.test.js', 'acp-signin-regressions.test.js', 'subscription-host.test.js');
+if (!live) suites.push('acp-verification.test.js');
+if (!live) suites.push('reasoning.test.js', 'reasoning-ui.test.js', 'thinking-state-ui.test.js');
+if (!live) suites.push('ui-polish.test.js', 'effects-ui.test.js');
+let failed = 0;
+for (const file of suites) {
+	const started = Date.now();
+	// This suite exercises many real Windows shells and child hosts; ten minutes cuts off healthy progress.
+	const timeout = file === 'controller.test.js' ? 20 * 60_000 : 10 * 60_000;
+	const r = spawnSync(process.execPath, [path.join(__dirname, file)], { stdio: 'inherit', timeout, env: testEnv() });
+	const ok = r.status === 0;
+	failed += ok ? 0 : 1;
+	console.log(`\n${ok ? 'PASS' : 'FAIL'} ${file} (${((Date.now() - started) / 1000).toFixed(1)}s)\n`);
+}
+console.log(failed ? `${failed} suite(s) failed.` : 'All suites passed.');
+process.exit(failed ? 1 : 0);
