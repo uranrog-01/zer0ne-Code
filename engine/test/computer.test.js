@@ -167,12 +167,14 @@ test('permissions default paused, survive restart and invalidate observations af
 	try {
 		fs.unlinkSync(control.computerPolicyFile(f.dir));
 		assert.equal(control.computerPolicy(f.dir).paused,true);
-		await assert.rejects(f.shot(),/paused/); assert.equal(f.calls.length,0);
+		await assert.rejects(f.shot(),/No app is allowed.*Resume/); assert.equal(f.calls.length,0);
 		control.changeComputerPolicy(f.dir,p=>{p.allowed=['C:\\allowed.exe'];p.paused=false;});
 		await f.shot();
 		control.changeComputerPolicy(f.dir,p=>{p.allowed=[];});
-		await assert.rejects(f.run({action:'type',text:'no access'}),/Allow an app/);
-		control.changeComputerPolicy(f.dir,p=>{p.allowed=['C:\\allowed.exe'];});
+		await assert.rejects(f.run({action:'type',text:'no access'}),/No app is allowed/);
+		control.changeComputerPolicy(f.dir,p=>{p.allowed=['C:\\allowed.exe'];p.paused=true;});
+		await assert.rejects(f.run({action:'type',text:'paused'}),/paused.*choose Resume/);
+		control.changeComputerPolicy(f.dir,p=>{p.allowed=['C:\\allowed.exe'];p.paused=false;});
 		await assert.rejects(f.run({action:'type',text:'old screenshot'}),/screenshot/);
 		assert.deepEqual(control.computerPolicy(f.dir).allowed,['C:\\allowed.exe']);
 		fs.writeFileSync(control.computerPolicyFile(f.dir),'{broken');

@@ -86,8 +86,9 @@ export function computerActivity(storage: string): ComputerActivity | undefined 
 }
 export function beginComputerActivity(storage: string, action: string, session: string, signal: AbortSignal) {
 	const p = computerPolicy(storage);
-	if (p.paused) throw new Error('Computer Use is paused. Open Computer Use permissions and choose Resume.');
-	if (!p.allowed.length) throw new Error('Allow an app in Computer Use permissions first.');
+	// Only the user can allow an app or resume; say which of the two is missing.
+	if (!p.allowed.length) throw new Error('No app is allowed for Computer Use yet. The user must open Computer Use permissions, allow the app, then choose Resume. The agent cannot do this.');
+	if (p.paused) throw new Error('Computer Use is paused. The user must open Computer Use permissions and choose Resume. The agent cannot do this.');
 	const id = randomUUID();
 	const abort = new AbortController(), dir = path.join(computerDirectory(storage), 'activity'), file = path.join(dir, id + '.json');
 	const check = () => {
