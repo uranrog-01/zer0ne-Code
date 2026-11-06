@@ -111,7 +111,7 @@ class OverlayFixture {
             Check(!Acked(dir,"design-two"),"Input must wait until the design window shows the action");
             Check(lines.Exists(l=>l.Contains("\"design\":true") && l.Contains("design-two") && l.Contains("\"rect\"")),"The design state was not reported");
             overlay.Shown("design-two");Tick(overlay);
-            Check(Acked(dir,"design-two"),"The shown visual did not release the action");
+            Check(Acked(dir,"design-two"),"The shown visual did not release the action: "+Field(overlay,"lastError")+"; lines="+String.Join(" | ",lines.ToArray()));
             var shot=Path.Combine(dir,"frame-test.png");overlay.Command("capture "+shot);
             Check(File.Exists(shot) && lines.Exists(l=>l.Contains("\"t\":\"capture\"") && l.Contains("\"ok\":true")),"The presented window was not captured");
             using(var image=Image.FromFile(shot)) Check(image.Width>200 && image.Height>200,"The captured window is empty");

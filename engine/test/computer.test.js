@@ -148,16 +148,21 @@ test('every approved Windows action carries the screenshot window identity', asy
 	} finally { f.cleanup(); }
 });
 
-test('app selection exposes only allowed windows and cannot select a disallowed app', async () => {
-	const f=fixture();
+test('app selection lists other apps by name only and asks before allowing one', async () => {
+	const f=fixture(), control=require(path.join(engineOut,'tools/computerControl'));
 	try {
 		const listed=JSON.parse((await f.run({action:'apps'})).api);
-		assert.equal(listed.windows.length,1); assert.equal(listed.windows[0].name,'allowed'); assert(!JSON.stringify(listed).includes('Private app'));
+		assert.equal(listed.windows.length,1); assert.equal(listed.windows[0].name,'allowed'); assert(!JSON.stringify(listed).includes('Private app'),'titles of other apps stay private');
+		assert.deepEqual(listed.available,[{name:'blocked',windowId:'43'}]);
 		await f.shot({app:'ignored'});
-		const before=f.calls.length;
-		await assert.rejects(f.run({action:'screenshot',app:'blocked'}),/allowed open/);
-		assert.equal(f.calls.slice(before).some(call=>call.args[0]==='screenshot'),false);
-		await f.run({action:'screenshot',app:'42'});
+		let before=f.calls.length, asked='';
+		const declined=await f.run({action:'screenshot',app:'blocked'},{approve:async what=>{asked=what;return false;}});
+		assert.equal(declined.error,true); assert.match(asked,/allow blocked for Computer Use \(C:\\blocked\.exe\)/);
+		assert.equal(f.calls.slice(before).some(call=>call.args[0]==='screenshot'),false,'declined: nothing captured');
+		assert.deepEqual(control.computerPolicy(f.dir).allowed,['C:\\allowed.exe']);
+		await f.run({action:'screenshot',app:'blocked'});
+		assert.deepEqual(control.computerPolicy(f.dir).allowed,['C:\\allowed.exe','C:\\blocked.exe'],'approved (or Full access): the app is allowed');
+		before=f.calls.length; await f.run({action:'screenshot',app:'42'});
 		const shot=f.calls.at(-1).args; assert.equal(shot[0],'screenshot'); assert.deepEqual(shot.slice(-2),['--focus','42,77']);
 	} finally {f.cleanup();}
 });
@@ -167,14 +172,25 @@ test('permissions default paused, survive restart and invalidate observations af
 	try {
 		fs.unlinkSync(control.computerPolicyFile(f.dir));
 		assert.equal(control.computerPolicy(f.dir).paused,true);
-		await assert.rejects(f.shot(),/No app is allowed.*Resume/); assert.equal(f.calls.length,0);
+		await assert.rejects(f.shot(),/No app is allowed.*action apps/); assert.equal(f.calls.length,0);
 		control.changeComputerPolicy(f.dir,p=>{p.allowed=['C:\\allowed.exe'];p.paused=false;});
 		await f.shot();
 		control.changeComputerPolicy(f.dir,p=>{p.allowed=[];});
 		await assert.rejects(f.run({action:'type',text:'no access'}),/No app is allowed/);
+		// Paused by a permission change or a restart: one approval resumes (Full access approves itself).
 		control.changeComputerPolicy(f.dir,p=>{p.allowed=['C:\\allowed.exe'];p.paused=true;});
-		await assert.rejects(f.run({action:'type',text:'paused'}),/paused.*choose Resume/);
-		control.changeComputerPolicy(f.dir,p=>{p.allowed=['C:\\allowed.exe'];p.paused=false;});
+		let asked=''; await assert.rejects(f.run({action:'type',text:'old screenshot'},{approve:async what=>{asked=what;return true;}}),/screenshot/);
+		assert.match(asked,/resume Computer Use for allowed/); assert.equal(control.computerPolicy(f.dir).paused,false);
+		const stop=require('../../app/computer-stop'), cu=path.join(f.dir,'computer-use');
+		fs.writeFileSync(path.join(cu,'stop'),'start:fixture'); assert.equal(control.computerPauseReason(f.dir),'restart');
+		await f.shot(); assert.equal(control.computerPauseReason(f.dir),'ready','a restart resumes after approval');
+		// The user's own Stop, Pause or takeover is never resumed by the agent, even when every approval says yes.
+		for (const write of [stop.requestStop, stop.requestPause]) {
+			write(cu); const approvals=f.approvals();
+			await assert.rejects(f.shot(),/Only the user can resume/); assert.equal(f.approvals(),approvals,'not even asked');
+			assert.equal(control.computerPauseReason(f.dir),'user');
+			control.changeComputerPolicy(f.dir,p=>{p.paused=false;});
+		}
 		await assert.rejects(f.run({action:'type',text:'old screenshot'}),/screenshot/);
 		assert.deepEqual(control.computerPolicy(f.dir).allowed,['C:\\allowed.exe']);
 		fs.writeFileSync(control.computerPolicyFile(f.dir),'{broken');

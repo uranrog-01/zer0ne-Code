@@ -1257,7 +1257,7 @@ async function runToolInner(call: ToolCall, ctx: ToolContext): Promise<ToolOutco
 				await ctx.browser?.close();
 				return { api: 'Browser closed.', summary: 'closed' };
 			case 'computer': {
-				if (!ctx.settings.computerUse) throw new Error('Computer use is turned off in Settings → Features.');
+				if (!ctx.settings.computerUse) throw new Error('Computer Use is turned off. Turn it on in Settings → Browser & Computer Use.');
 				if (!ctx.storageDir || !ctx.mediaDir) {
 					throw new Error('Computer use is not available here.');
 				}

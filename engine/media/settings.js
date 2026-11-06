@@ -1701,7 +1701,7 @@
 			const card = h(
 				'div',
 				'card computer-use-settings',
-				switchRow('Enable Computer Use', 'Let a vision model see and control the Windows apps you allow. Actions are approved unless the chat is in Full access, and moving your mouse or typing pauses it.', 'computerUse') +
+				switchRow('Enable Computer Use', 'Let a vision model see and control Windows apps. It asks in the chat before using a new app and before each action; Full access skips those questions. Moving your mouse or typing pauses it, and only you resume after Stop or Pause.', 'computerUse') +
 					design +
 					switchRow('Keep screenshots in chat', 'Save what Computer Use sees in the chat so you can review the latest eight. Screenshots may contain app content.', 'computerScreenshotHistory') +
 					'<div class="setting-row"><div class="text"><div class="name">App permissions</div><div class="desc">Choose which apps it may control, and pause, resume or stop it in every project. Ctrl + Alt + Esc stops it from any app.</div></div><div class="control"><button class="btn btn-secondary btn-sm" data-computer-use>Manage apps</button></div></div>'

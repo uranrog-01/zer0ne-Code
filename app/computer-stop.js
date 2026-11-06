@@ -34,7 +34,9 @@ function resumeAfterRestart(directory) {
 function start(directory, shortcuts) {
 	const key = 'CommandOrControl+Alt+Escape';
 	let registered = false;
-	try { requestStop(directory); } catch (error) { console.error('Computer Use could not be paused at startup:',error.message); }
+	// "start:" tells a restart apart from the user's own Stop, Pause or takeover: only a restart
+	// may be resumed from the chat (and by itself in Full access).
+	try { writeToken(directory, 'start'); } catch (error) { console.error('Computer Use could not be paused at startup:',error.message); }
 	try { resumeAfterRestart(directory); } catch (error) { console.error('Computer Use could not stay ready after restart:',error.message); }
 	let advertised;
 	const refresh = () => {

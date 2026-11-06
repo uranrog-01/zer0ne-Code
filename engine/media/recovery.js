@@ -4,8 +4,8 @@
 		if (kind === 'command') return { next: 'Inspect the command output and current project files before running it again.', panel: 'terminal', label: 'Open Terminal' };
 		if (kind === 'mcp' || name.startsWith('mcp__')) return { next: 'Check this server’s connection and permissions, then review the tool result before retrying.', section: 'mcp', label: 'MCP connections' };
 		// Allowing an app and resuming are the user's to do, in the permissions window.
-		if (name === 'computer' && /not allowed|No app is allowed|Allow an app/i.test(text)) return { next: 'Allow the app in Computer Use permissions, then choose Resume. Only you can do this.', computer: true, label: 'Computer Use permissions' };
-		if (name === 'computer' && /paused|stopped|Resume/i.test(text)) return { next: 'Choose Resume in Computer Use permissions. Only you can do this.', computer: true, label: 'Computer Use permissions' };
+		if (name === 'computer' && /not allowed|No app is allowed|Allow an app|did not allow/i.test(text)) return { next: 'The agent asks to allow an app when it needs one. You can also allow apps yourself in Computer Use permissions.', computer: true, label: 'Computer Use permissions' };
+		if (name === 'computer' && /paused|stopped|Resume/i.test(text)) return { next: 'You stopped or paused Computer Use. Choose Resume in Computer Use permissions when you want it to continue.', computer: true, label: 'Computer Use permissions' };
 		if (name === 'computer') return { next: 'Take a new screenshot of the app before repeating the action.', computer: true, label: 'Computer Use permissions' };
 		if (name.startsWith('browser_')) return { next: 'Inspect the current page before repeating the action.', section: 'browser', label: 'Browser settings' };
 		if (kind === 'tool') return { next: 'Inspect the reported output and affected files. Continue from the failed step after correcting the cause.', panel: 'explorer', label: 'Inspect project files' };
