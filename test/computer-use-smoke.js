@@ -22,6 +22,13 @@ module.exports = async function computerUseSmoke(page, shots, until, executable,
 			process.kill(shortcut.pid,0);
 			return page.eval(`document.querySelector('[data-cu-shortcut]').textContent === ${JSON.stringify(shortcut.registered ? 'Stop from any app: Ctrl + Alt + Esc' : 'Stop pauses Computer Use across all projects.')}`);
 		});
+		// The Design cursor switch: off by default (classic outline), saved as a setting both ways.
+		assert(await page.eval(`document.querySelector('[data-cu-effects]').checked===false&&document.querySelector('[data-cu-effects-note]').textContent.startsWith('Off')`),'design cursor effects start off');
+		await page.eval(`document.querySelector('[data-cu-effects]').click()`);
+		await until('design cursor effects on',()=>page.eval(`window.__cuMessages.findLast(m=>m.type==='computerUseState').effects==='design'&&document.querySelector('[data-cu-effects]').checked&&document.querySelector('[data-cu-effects-note]').textContent.startsWith('On')`));
+		await page.screenshot(path.join(shots,'computer-use-design-switch.png'));
+		await page.eval(`document.querySelector('[data-cu-effects]').click()`);
+		await until('design cursor effects off',()=>page.eval(`window.__cuMessages.findLast(m=>m.type==='computerUseState').effects==='classic'&&!document.querySelector('[data-cu-effects]').checked`));
 		await page.screenshot(path.join(shots,'computer-use-permissions.png'));
 		await page.send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:false});
 		assert(await page.eval(`(()=>{const d=document.querySelector('.cu-dialog'),r=d.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth+1&&d.scrollWidth<=d.clientWidth+1})()`),'permissions fit a narrow window');
@@ -37,9 +44,9 @@ module.exports = async function computerUseSmoke(page, shots, until, executable,
 		await until('app permission removed',()=>page.eval(`!document.querySelector('[data-cu-revoke]')&&document.querySelector('[data-cu-resume]').disabled`));
 		await page.eval(`document.querySelector('[data-cu-enable]').click();document.querySelector('[data-cu-close]').click()`);
 		await until('Computer Use disabled',()=>page.eval(`document.querySelector('.cu-status').hidden`));
-		console.log('Computer Use UI passed: native app discovery, allow/resume/Stop/revoke, actual shortcut availability, dark/light and narrow layouts.');
+		console.log('Computer Use UI passed: native app discovery, allow/resume/Stop/revoke, the design cursor switch, actual shortcut availability, dark/light and narrow layouts.');
 	} finally {
 		await page.send('Emulation.clearDeviceMetricsOverride');
-		await page.eval(`document.querySelector('.cu-dialog [data-cu-close]')?.click();window.removeEventListener('message',window.__cuListener);window.Bridge.post({type:'updateSettings',patch:{computerUse:false}})`);
+		await page.eval(`document.querySelector('.cu-dialog [data-cu-close]')?.click();window.removeEventListener('message',window.__cuListener);window.Bridge.post({type:'updateSettings',patch:{computerUse:false,computerEffects:'classic'}})`);
 	}
 };

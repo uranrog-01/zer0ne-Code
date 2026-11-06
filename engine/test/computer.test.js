@@ -36,7 +36,7 @@ function fixture(platform = 'win32') {
 		queueMicrotask(() => {
 			if (closed || mode === 'hang') return;
 			if (/csc\.exe$/.test(file)) fs.writeFileSync(args.find(a => a.startsWith('-out:')).slice(5), 'fixture executable');
-			else if (args[0] === 'windows') p.stdout.write(JSON.stringify([{path:'C:\\allowed.exe',name:'allowed',title:'Allowed app',windowId:'42',processId:77},{path:'C:\\blocked.exe',name:'blocked',title:'Private app',windowId:'43',processId:78}]));
+			else if (args[0] === 'windows') p.stdout.write(JSON.stringify([{path:'C:\\allowed.exe',name:'allowed',title:'Allowed app',windowId:'42',processId:77},{path:'C:\\blocked.exe',name:'blocked',title:'Private app',windowId:'43',processId:78},{path:process.execPath,name:'zer0ne',title:'zer0ne',windowId:'44',processId:79}]));
 			else if (args[0] === 'screenshot') {
 				fs.writeFileSync(args[1], 'fixture image');
 				p.stdout.write(mode === 'bad-geometry' ? '{}' : JSON.stringify({ windowId: '42', processId: 77, ...bounds }));
@@ -148,16 +148,24 @@ test('every approved Windows action carries the screenshot window identity', asy
 	} finally { f.cleanup(); }
 });
 
-test('app selection exposes only allowed windows and cannot select a disallowed app', async () => {
-	const f=fixture();
+test('app selection lists other apps by name only and asks before allowing one', async () => {
+	const f=fixture(), control=require(path.join(engineOut,'tools/computerControl'));
 	try {
 		const listed=JSON.parse((await f.run({action:'apps'})).api);
-		assert.equal(listed.windows.length,1); assert.equal(listed.windows[0].name,'allowed'); assert(!JSON.stringify(listed).includes('Private app'));
+		assert.equal(listed.windows.length,1); assert.equal(listed.windows[0].name,'allowed'); assert(!JSON.stringify(listed).includes('Private app'),'titles of other apps stay private');
+		assert.deepEqual(listed.available,[{name:'blocked',windowId:'43'}],'zer0ne itself is never offered');
+		let selfAsked=false; await assert.rejects(f.run({action:'screenshot',app:'44'},{approve:async()=>{selfAsked=true;return true;}}),/allowed open/);
+		assert.equal(selfAsked,false,'zer0ne itself is never offered for approval, even in Full access');
+		await f.shot(); const deny=f.calls.at(-1).args; assert.equal(deny[deny.indexOf('--deny')+1],process.execPath,'the helper refuses zer0ne itself');
 		await f.shot({app:'ignored'});
-		const before=f.calls.length;
-		await assert.rejects(f.run({action:'screenshot',app:'blocked'}),/allowed open/);
-		assert.equal(f.calls.slice(before).some(call=>call.args[0]==='screenshot'),false);
-		await f.run({action:'screenshot',app:'42'});
+		let before=f.calls.length, asked='';
+		const declined=await f.run({action:'screenshot',app:'blocked'},{approve:async what=>{asked=what;return false;}});
+		assert.equal(declined.error,true); assert.match(asked,/allow blocked for Computer Use \(C:\\blocked\.exe\)/);
+		assert.equal(f.calls.slice(before).some(call=>call.args[0]==='screenshot'),false,'declined: nothing captured');
+		assert.deepEqual(control.computerPolicy(f.dir).allowed,['C:\\allowed.exe']);
+		await f.run({action:'screenshot',app:'blocked'});
+		assert.deepEqual(control.computerPolicy(f.dir).allowed,['C:\\allowed.exe','C:\\blocked.exe'],'approved (or Full access): the app is allowed');
+		before=f.calls.length; await f.run({action:'screenshot',app:'42'});
 		const shot=f.calls.at(-1).args; assert.equal(shot[0],'screenshot'); assert.deepEqual(shot.slice(-2),['--focus','42,77']);
 	} finally {f.cleanup();}
 });
@@ -167,12 +175,25 @@ test('permissions default paused, survive restart and invalidate observations af
 	try {
 		fs.unlinkSync(control.computerPolicyFile(f.dir));
 		assert.equal(control.computerPolicy(f.dir).paused,true);
-		await assert.rejects(f.shot(),/paused/); assert.equal(f.calls.length,0);
+		await assert.rejects(f.shot(),/No app is allowed.*action apps/); assert.equal(f.calls.length,0);
 		control.changeComputerPolicy(f.dir,p=>{p.allowed=['C:\\allowed.exe'];p.paused=false;});
 		await f.shot();
 		control.changeComputerPolicy(f.dir,p=>{p.allowed=[];});
-		await assert.rejects(f.run({action:'type',text:'no access'}),/Allow an app/);
-		control.changeComputerPolicy(f.dir,p=>{p.allowed=['C:\\allowed.exe'];});
+		await assert.rejects(f.run({action:'type',text:'no access'}),/No app is allowed/);
+		// Paused by a permission change or a restart: one approval resumes (Full access approves itself).
+		control.changeComputerPolicy(f.dir,p=>{p.allowed=['C:\\allowed.exe'];p.paused=true;});
+		let asked=''; await assert.rejects(f.run({action:'type',text:'old screenshot'},{approve:async what=>{asked=what;return true;}}),/screenshot/);
+		assert.match(asked,/resume Computer Use for allowed/); assert.equal(control.computerPolicy(f.dir).paused,false);
+		const stop=require('../../app/computer-stop'), cu=path.join(f.dir,'computer-use');
+		fs.writeFileSync(path.join(cu,'stop'),'start:fixture'); assert.equal(control.computerPauseReason(f.dir),'restart');
+		await f.shot(); assert.equal(control.computerPauseReason(f.dir),'ready','a restart resumes after approval');
+		// The user's own Stop, Pause or takeover is never resumed by the agent, even when every approval says yes.
+		for (const write of [stop.requestStop, stop.requestPause]) {
+			write(cu); const approvals=f.approvals();
+			await assert.rejects(f.shot(),/Only the user can resume/); assert.equal(f.approvals(),approvals,'not even asked');
+			assert.equal(control.computerPauseReason(f.dir),'user');
+			control.changeComputerPolicy(f.dir,p=>{p.paused=false;});
+		}
 		await assert.rejects(f.run({action:'type',text:'old screenshot'}),/screenshot/);
 		assert.deepEqual(control.computerPolicy(f.dir).allowed,['C:\\allowed.exe']);
 		fs.writeFileSync(control.computerPolicyFile(f.dir),'{broken');
@@ -180,6 +201,22 @@ test('permissions default paused, survive restart and invalidate observations af
 	} finally {f.cleanup();}
 });
 
+test('Stay ready after restart resumes only when chosen and an app is allowed',()=>{
+	const stop=require('../../app/computer-stop'), control=require(path.join(engineOut,'tools/computerControl'));
+	const dir=fs.mkdtempSync(path.join(os.tmpdir(),'zc-stay-')), cu=path.join(dir,'computer-use');
+	try {
+		fs.mkdirSync(cu,{recursive:true});
+		control.changeComputerPolicy(dir,p=>{p.allowed=['C:\\allowed.exe'];p.paused=false;});
+		stop.requestStop(cu); assert.equal(control.computerPolicy(dir).paused,true,'a restart pauses by default');
+		assert.equal(stop.resumeAfterRestart(cu),false); assert.equal(control.computerPolicy(dir).paused,true);
+		control.changeComputerPolicy(dir,p=>{p.resumeOnStart=true;});
+		const before=control.computerPolicy(dir).epoch;
+		stop.requestStop(cu); assert.equal(stop.resumeAfterRestart(cu),true);
+		const after=control.computerPolicy(dir); assert.equal(after.paused,false,'chosen: ready again after restart'); assert.notEqual(after.epoch,before,'old observations stay invalid');
+		control.changeComputerPolicy(dir,p=>{p.allowed=[];}); stop.requestStop(cu);
+		assert.equal(stop.resumeAfterRestart(cu),false,'no allowed app: stays paused'); assert.equal(control.computerPolicy(dir).paused,true);
+	} finally { fs.rmSync(dir,{recursive:true,force:true}); }
+});
 test('Stop cancels pending approval and running input across independent engines; resume cannot revive either',async()=>{
 	const f=fixture(), control=require(path.join(engineOut,'tools/computerControl'));
 	try {

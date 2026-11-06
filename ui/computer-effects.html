@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>zer0ne Code — Computer Use</title>
+	<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src data:">
+	<link rel="stylesheet" href="computer-effects.css">
+</head>
+<body>
+	<canvas id="stage" aria-hidden="true"></canvas>
+	<div id="bar" class="bar" role="status" aria-live="polite">
+		<i class="dot" aria-hidden="true">z</i>
+		<span class="title"></span>
+		<span class="sep"></span>
+		<span class="action"></span>
+		<span class="layers"><span class="count"></span><span class="meter"><i></i></span></span>
+		<button type="button" class="pause">Pause</button>
+		<button type="button" class="stop" title="Stop Computer Use in every project (Ctrl + Alt + Esc)">Stop</button>
+	</div>
+	<script src="computer-effects-geometry.js"></script>
+	<script src="computer-effects.js"></script>
+</body>
+</html>

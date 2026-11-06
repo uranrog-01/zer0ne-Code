@@ -1,0 +1,29 @@
+html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; user-select: none; }
+#stage { position: fixed; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; }
+.bar {
+	position: fixed; left: 0; top: 0; display: flex; align-items: center; gap: 9px; height: 38px; padding: 0 6px 0 9px; box-sizing: border-box;
+	background: rgba(30, 30, 30, .95); color: #fff; border-radius: 12px; white-space: nowrap;
+	box-shadow: 0 10px 30px rgba(0, 0, 0, .32), inset 0 0 0 1px rgba(255, 255, 255, .08);
+	font: 500 12px/1 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+	opacity: 0; transform: translate(-50%, 14px); pointer-events: none;
+	transition: opacity .35s ease, transform .4s cubic-bezier(.2, .8, .2, 1), box-shadow .25s ease;
+}
+.bar.on { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+.bar.paused { box-shadow: 0 10px 30px rgba(0, 0, 0, .32), inset 0 0 0 1px #de9e3a; }
+.dot { display: block; width: 18px; height: 18px; border-radius: 50%; background: #0d99ff; font: 700 10px/18px "Segoe UI", sans-serif; font-style: normal; text-align: center; }
+.paused .dot { background: #de9e3a; }
+.title { font-weight: 600; max-width: 300px; overflow: hidden; text-overflow: ellipsis; }
+.sep { width: 1px; height: 12px; background: #454545; }
+.action { color: #8fd0ff; }
+.paused .action { color: #f0bd6c; }
+.layers { display: flex; align-items: center; gap: 7px; color: #c9c9c9; font-variant-numeric: tabular-nums; }
+.layers[hidden] { display: none; }
+.meter { width: 54px; height: 3px; border-radius: 2px; background: #3a3a3a; overflow: hidden; }
+.meter i { display: block; height: 100%; width: 0; background: #0d99ff; transition: width .25s ease; }
+.bar button { all: unset; cursor: pointer; padding: 7px 10px; border-radius: 8px; background: #2c2c2c; color: #fff; font: 500 12px/1 "Segoe UI", sans-serif; transition: background .15s; }
+.bar button:hover { background: #3b3b3b; }
+.bar button:focus-visible { outline: 2px solid #0d99ff; outline-offset: 1px; }
+.bar .stop { background: #43232a; color: #ff9ba0; }
+.bar .stop:hover { background: #592d36; }
+.paused .pause { background: #0d99ff; }
+@media (prefers-reduced-motion: reduce) { .bar { transition: none; } }

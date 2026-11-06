@@ -56,6 +56,10 @@ test('Expanding one turn does not invalidate unrelated history; nested full outp
 test('Recovery guidance uses relevant destinations and cannot turn error text into an executable action', () => {
 	const dom = new JSDOM('', { runScripts: 'outside-only' }), w = dom.window; w.eval(read('engine/media/recovery.js'));
 	assert.equal(w.RecoveryUI.guidance('response', '429 rate limit').section, 'usage');
+	assert.equal(w.RecoveryUI.guidance('tool', 'No app is allowed for Computer Use yet.', 'computer').label, 'Computer Use permissions');
+	assert.match(w.RecoveryUI.guidance('tool', 'Computer Use is paused.', 'computer').next, /Resume/);
+	assert.equal(w.RecoveryUI.guidance('tool', 'timed out', 'browser_click').section, 'browser');
+	w.document.body.innerHTML = w.RecoveryUI.html('tool', 'Computer Use is paused.', 'computer'); assert(w.document.querySelector('.recovery-actions [data-computer-use]'), 'the card opens Computer Use permissions');
 	assert.equal(w.RecoveryUI.guidance('mcp', 'failed').section, 'mcp'); assert.equal(w.RecoveryUI.guidance('command', 'failed').panel, 'terminal');
 	w.document.body.innerHTML = w.RecoveryUI.html('tool', '<img onerror=bad()>', 'mcp__service__write');
 	assert.equal(w.document.querySelector('img'), null); assert(w.document.querySelector('[data-open-settings="mcp"]')); assert.equal(w.document.querySelector('[data-retry]'), null);

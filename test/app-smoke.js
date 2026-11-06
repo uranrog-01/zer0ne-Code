@@ -639,11 +639,10 @@ function alive(pid) {
 		await check('Features dashboard shows scoped evidence, search and dated activity', async () => {
 			await page.eval(`window.Settings.open('features')`);
 			try {
-				await until('Features catalog and checks', () => page.eval(`!!document.querySelector('.features-hub .cap-stat') && !document.querySelector('[data-act="features-check"]').disabled`));
-				assert.deepEqual(await page.eval(`Array.from(document.querySelectorAll('.cap-tabs [data-feature-tab]')).map(b=>b.textContent)`),['Overview','Capabilities','Checks & activity','Benchmark']);
+				await until('Features catalog and checks', () => page.eval(`!!document.querySelector('.features-hub .fx-summary') && !document.querySelector('[data-act="features-check"]').disabled`));
+				assert.deepEqual(await page.eval(`Array.from(document.querySelectorAll('.cap-tabs [data-feature-tab]')).map(b=>b.textContent)`),['Features','Checks & runs','Benchmark']);
+				await until('Features list', () => page.eval(`document.querySelectorAll('[data-feature]').length > 15`));
 				await page.screenshot(path.join(shots,'features-overview.png'));
-				await page.eval(`document.querySelector('[data-feature-tab="capabilities"]').click()`);
-				await until('Features cards', () => page.eval(`document.querySelectorAll('[data-feature]').length > 15`));
 				assert(await page.eval(`!document.querySelector('[data-feature="debugTools"]') && !!document.querySelector('[data-feature="projectVerification"]') && !!document.querySelector('[data-feature="codeIntelligence"]')`));
 				await page.screenshot(path.join(shots,'features-capabilities.png'));
 				await page.eval(`(() => { const input=document.getElementById('feature-search'); input.focus(); input.value='dependency'; input.dispatchEvent(new Event('input',{bubbles:true})); })()`);
@@ -652,10 +651,15 @@ function alive(pid) {
 				await page.eval(`document.querySelector('[data-feature-tab="checks"]').click()`);
 				await until('Features health evidence and empty project activity', () => page.eval(`!!document.querySelector('.feature-check-results details') && document.querySelector('.feature-reports').textContent.includes('No project runs yet')`));
 				await page.screenshot(path.join(shots,'features-checks.png'));
+				await page.eval(`window.Settings.open('computer')`);
+				await until('Computer Use settings on the browser page', () => page.eval(`document.querySelector('#s-page .page-title')?.textContent==='Browser & Computer Use' && !!document.querySelector('.computer-use-settings #s-computerUse') && !!document.querySelector('.computer-use-settings #s-computerEffects') && !!document.querySelector('.computer-use-settings [data-computer-use]')`));
+				await page.eval(`document.querySelector('.computer-use-settings').scrollIntoView({block:'center'})`);
+				await page.screenshot(path.join(shots,'browser-computer-use.png'));
+				await page.eval(`window.Settings.open('features')`);
 				await page.send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
 				try {
-					await page.eval(`document.body.classList.add('remote'); document.querySelector('[data-feature-tab="capabilities"]').click(); const input=document.getElementById('feature-search'); input.value=''; input.dispatchEvent(new Event('input',{bubbles:true}));`);
-					assert(await page.eval(`(() => { const page=document.querySelector('.features-hub'); return page.scrollWidth <= page.clientWidth+1 && getComputedStyle(document.querySelector('.cap-stats')).gridTemplateColumns.split(' ').length===2; })()`),'Features stays within the mobile viewport');
+					await page.eval(`document.body.classList.add('remote'); document.querySelector('[data-feature-tab="features"]').click(); const input=document.getElementById('feature-search'); input.value=''; input.dispatchEvent(new Event('input',{bubbles:true}));`);
+					assert(await page.eval(`(() => { const page=document.querySelector('.features-hub'); return page.scrollWidth <= page.clientWidth+1 && [...document.querySelectorAll('.fx-row')].every(row => row.getBoundingClientRect().right <= innerWidth+1); })()`),'Features stays within the mobile viewport');
 					await page.screenshot(path.join(shots,'features-mobile.png'));
 				} finally { await page.send('Emulation.clearDeviceMetricsOverride'); await page.eval(`document.body.classList.remove('remote')`); }
 			} finally { await page.eval(`window.Settings.close()`); }

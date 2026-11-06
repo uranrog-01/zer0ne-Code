@@ -59,7 +59,7 @@ static class Input
 	[DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
 	static IntPtr inputWindow;
 	static uint inputProcess;
-	static string policyFile, policyEpoch;
+	static string policyFile, policyEpoch, denyApp;
 	static bool pointer;
 	static POINT pointerPosition;
 	class Policy { public string epoch; public bool paused; public string[] allowed; public string stop; }
@@ -78,6 +78,23 @@ static class Input
 		try { uint size = 32768; var text = new StringBuilder((int)size); if (!QueryFullProcessImageName(process, 0, text, ref size)) throw new ArgumentException("Cannot identify this app."); return text.ToString(); }
 		finally { CloseHandle(process); }
 	}
+	[DllImport("user32.dll")] static extern bool EnumChildWindows(IntPtr parent, EnumWindow callback, IntPtr param);
+	// Store apps draw inside ApplicationFrameHost, which hosts every Store app's window. Allowing
+	// that host would allow them all, so such a window is identified by the app process inside it,
+	// and refused when there is none (a suspended app shows only its frame).
+	static string WindowApp(IntPtr window, uint pid)
+	{
+		string app = AppPath(pid);
+		if (!String.Equals(Path.GetFileName(app), "ApplicationFrameHost.exe", StringComparison.OrdinalIgnoreCase)) return app;
+		uint hosted = 0;
+		EnumChildWindows(window, delegate(IntPtr child, IntPtr param) {
+			uint owner; GetWindowThreadProcessId(child, out owner);
+			if (owner != 0 && owner != pid) { hosted = owner; return false; }
+			return true;
+		}, IntPtr.Zero);
+		if (hosted == 0) throw new ArgumentException("This Store app is not running inside its window. Restore the app, then take a new screenshot.");
+		return AppPath(hosted);
+	}
 	static void Permit(IntPtr window, uint pid)
 	{
 		if (String.IsNullOrEmpty(policyFile) || String.IsNullOrEmpty(policyEpoch)) throw new ArgumentException("Computer Use requires app permissions.");
@@ -88,7 +105,9 @@ static class Input
 		if (policy == null || policy.paused || policy.epoch != policyEpoch || policy.allowed == null) throw new ArgumentException("Computer Use stopped or permissions changed. Resume and take a new screenshot.");
 		string stopFile = Path.Combine(Path.GetDirectoryName(policyFile),"stop"), stop = File.Exists(stopFile) ? ReadShared(stopFile) : "";
 		if ((policy.stop ?? "") != stop) throw new ArgumentException("Computer Use stopped. Resume and take a new screenshot.");
-		string app = AppPath(pid);
+		string app = WindowApp(window, pid);
+		// The agent's own app: controlling it could answer the agent's own approvals.
+		if (!String.IsNullOrEmpty(denyApp) && String.Equals(app, denyApp, StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("zer0ne cannot control its own window. Bring the app to control to the front, then take a new screenshot.");
 		if (!Array.Exists(policy.allowed, value => String.Equals(value, app, StringComparison.OrdinalIgnoreCase))) throw new ArgumentException("This app is not allowed. Open Computer Use permissions to allow it.");
 	}
 	static Rectangle Bounds(IntPtr window)
@@ -250,7 +269,7 @@ static class Input
 					uint pid; GetWindowThreadProcessId(window, out pid);
 					if (!SameWindow(window, pid) || apps.Count >= 100) return true;
 					var text = new StringBuilder(161); GetWindowText(window, text, text.Capacity); if (text.Length == 0) return true;
-					try { string app = AppPath(pid); apps.Add(new {path=app, name=Path.GetFileNameWithoutExtension(app), title=text.ToString(), windowId=window.ToInt64().ToString(), processId=pid}); } catch { }
+					try { string app = WindowApp(window, pid); apps.Add(new {path=app, name=Path.GetFileNameWithoutExtension(app), title=text.ToString(), windowId=window.ToInt64().ToString(), processId=pid}); } catch { }
 					return true;
 				}, IntPtr.Zero);
 				Console.WriteLine(new JavaScriptSerializer().Serialize(apps)); return 0;
@@ -258,6 +277,8 @@ static class Input
 			int policyIndex = Array.IndexOf(args, "--policy"), epochIndex = Array.IndexOf(args, "--epoch");
 			if (policyIndex >= 0 && policyIndex + 1 < args.Length) policyFile = args[policyIndex + 1];
 			if (epochIndex >= 0 && epochIndex + 1 < args.Length) policyEpoch = args[epochIndex + 1];
+			int denyIndex = Array.IndexOf(args, "--deny");
+			if (denyIndex >= 0 && denyIndex + 1 < args.Length) denyApp = args[denyIndex + 1];
 			int focusIndex = Array.IndexOf(args, "--focus");
 			if (focusIndex >= 0)
 			{

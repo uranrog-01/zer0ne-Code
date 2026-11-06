@@ -32,9 +32,20 @@ class ComputerOverlay : ApplicationContext
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr window, StringBuilder title, int size);
     [DllImport("user32.dll")] static extern bool SystemParametersInfo(uint action, uint param, out bool value, uint flags);
     [DllImport("user32.dll")] static extern bool SetProcessDPIAware();
+    [DllImport("user32.dll")] static extern bool PrintWindow(IntPtr window, IntPtr dc, uint flags);
+    [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr window, int attribute, out Rect value, int size);
 
     public class Policy { public string epoch, stop; public bool paused; public string[] allowed; }
-    public class Presentation { public string id, epoch, session, windowId, action, theme; public int pid, processId; public double at; public int? x, y; public bool reducedMotion; }
+    public class Presentation { public string id, epoch, session, windowId, action, theme, effects; public int pid, processId; public double at; public int? x, y; public bool reducedMotion; }
+    // The design effects are drawn by the app's own window. This process still owns the hooks,
+    // the heartbeat and the decision to show them: only while that window has loaded, and an
+    // action is acknowledged only after that window reports the visual for it as shown.
+    volatile bool designReady;
+    volatile string shownId;
+    bool designMode;
+    string ackedId, lastState, stateTitle;
+    bool stateDark;
+    public Action<string> Output = line => { lock (Console.Out) { Console.Out.WriteLine(line); Console.Out.Flush(); } };
     readonly string directory;
     readonly int parent;
     readonly JavaScriptSerializer json = new JavaScriptSerializer();
@@ -95,6 +106,7 @@ class ComputerOverlay : ApplicationContext
         outline.Conceal();
         if (end) { dismissed = current == null ? null : current.id; current = null; pill.Conceal(); }
         else PaintPill();
+        Emit();
     }
     IntPtr Mouse(int code, IntPtr message, IntPtr data) {
         if (code >= 0 && watching) {
@@ -125,11 +137,18 @@ class ComputerOverlay : ApplicationContext
             if (!long.TryParse(p.windowId, out handle) || handle <= 0 || !IsWindow(new IntPtr(handle)) || GetWindowThreadProcessId(new IntPtr(handle), out pid) == 0 || pid != p.processId) { Clear(); return; }
             current = p;
             timer.Interval = 40;
+            bool animation; SystemParametersInfo(0x1042, 0, out animation, 0);
+            bool reduced = p.reducedMotion || !animation || SystemInformation.HighContrast;
+            designMode = p.effects == "design" && designReady && !reduced;
             bool ready = policy != null && !policy.paused && policy.epoch == p.epoch && (policy.stop ?? "") == StopToken();
             if (!ready) {
                 if (StopToken().StartsWith("stop:") || policy == null || policy.allowed == null || policy.allowed.Length == 0) { dismissed = p.id; paused = false; Clear(); return; }
-                if (watching) { paused = true; handedOff = false; }
-                watching = false; outline.Conceal(); if (paused) PaintPill(); else pill.Conceal(); return;
+                // A pause or handoff token is shown as paused even while nothing was watched
+                // (an approval leaves the mouse and keyboard to the user).
+                string token = StopToken();
+                if (token.StartsWith("pause:") || token.StartsWith("handoff:")) { paused = true; handedOff = token.StartsWith("handoff:"); }
+                else if (watching) { paused = true; handedOff = false; }
+                watching = false; outline.Conceal(); if (paused) PaintPill(); else pill.Conceal(); Emit(); return;
             }
             paused = false; handedOff = false;
             Rect bounds;
@@ -138,8 +157,7 @@ class ComputerOverlay : ApplicationContext
             var screen = Screen.PrimaryScreen.Bounds;
             var rect = Rectangle.Intersect(Rectangle.FromLTRB(bounds.Left, bounds.Top, bounds.Right, bounds.Bottom), screen);
             if (rect.IsEmpty) { Clear(); return; }
-            bool animation; SystemParametersInfo(0x1042, 0, out animation, 0);
-            outline.ReducedMotion = p.reducedMotion || !animation || SystemInformation.HighContrast;
+            outline.ReducedMotion = reduced;
             outline.Bounds = rect; outline.Current = p;
             bool changed = lastId != p.id;
             if (changed) { outline.FromX = outline.ToX ?? p.x; outline.FromY = outline.ToY ?? p.y; outline.ToX = p.x; outline.ToY = p.y; lastId = p.id; changedAt = Now; }
@@ -155,13 +173,62 @@ class ComputerOverlay : ApplicationContext
             if (!watching) hasPointer = GetCursorPos(out lastPointer);
             watching = p.action != "approval";
             PaintPill();
-            if (GetForegroundWindow() == target) { if (!outline.IsShown) outline.Present(); outline.Invalidate(); } else outline.Conceal();
-            if (Now - heartbeat > 200 || changed) { Atomic("monitor-ready.json", json.Serialize(new { pid = Process.GetCurrentProcess().Id, epoch = p.epoch, id = p.id, at = Now })); heartbeat = Now; }
+            if (!designMode && GetForegroundWindow() == target) { if (!outline.IsShown) outline.Present(); outline.Invalidate(); } else outline.Conceal();
+            Emit();
+            if ((!designMode || shownId == p.id) && (Now - heartbeat > 200 || changed || ackedId != p.id)) { Atomic("monitor-ready.json", json.Serialize(new { pid = Process.GetCurrentProcess().Id, epoch = p.epoch, id = p.id, at = Now })); heartbeat = Now; ackedId = p.id; }
         } catch (Exception error) {
             lastError = error.Message;
             try { if (StopToken().StartsWith("stop:")) { paused = false; Clear(); return; } } catch { Clear(); return; }
-            if (paused && current != null) { watching = false; outline.Conceal(); PaintPill(); timer.Interval = 200; } else Clear();
+            if (paused && current != null) { watching = false; outline.Conceal(); PaintPill(); Emit(); timer.Interval = 200; } else Clear();
         }
+    }
+    // One line per change of what the design window should show, in physical screen pixels.
+    void Emit() {
+        string text;
+        var p = current; long handle;
+        if (p == null || !long.TryParse(p.windowId, out handle)) text = json.Serialize(new { t = "state", mode = "hidden" });
+        else {
+            var window = new IntPtr(handle);
+            var r = Rectangle.Intersect(Visible(window), Screen.PrimaryScreen.Bounds);
+            text = json.Serialize(new { t = "state", mode = paused ? "paused" : "active", design = designMode, effects = p.effects == "design" ? "design" : "classic", id = p.id, window = p.windowId, action = p.action, x = p.x, y = p.y, rect = new { x = r.X, y = r.Y, w = r.Width, h = r.Height }, focused = GetForegroundWindow() == window, title = stateTitle ?? "", dark = stateDark, handoff = handedOff });
+        }
+        if (text == lastState) return;
+        lastState = text; Output(text);
+    }
+    // The visible frame: Windows 10 and 11 report invisible resize borders in GetWindowRect.
+    static Rectangle Visible(IntPtr window) {
+        Rect r;
+        if (DwmGetWindowAttribute(window, 9, out r, Marshal.SizeOf(typeof(Rect))) != 0 && !GetWindowRect(window, out r)) return Rectangle.Empty;
+        return Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom);
+    }
+    public void Shown(string id) { shownId = id; }
+    public void SetDesign(bool on) { designReady = on; }
+    public void Command(string line) {
+        try {
+            if (line == "effects on") designReady = true;
+            else if (line == "effects off") designReady = false;
+            else if (line.StartsWith("shown ")) shownId = line.Substring(6).Trim();
+            else if (line.StartsWith("capture ")) Capture(line.Substring(8).Trim());
+        } catch (Exception error) { Output(new JavaScriptSerializer().Serialize(new { t = "capture", ok = false, error = error.Message })); }
+    }
+    // Pixels of the presented window only, for the design window to redraw; written inside this
+    // folder, which the app reads and deletes at once.
+    void Capture(string file) {
+        var serializer = new JavaScriptSerializer();
+        var full = Path.GetFullPath(file);
+        var root = Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        var p = current; long handle; Rect outer;
+        if (!full.StartsWith(root, StringComparison.OrdinalIgnoreCase) || !full.EndsWith(".png", StringComparison.OrdinalIgnoreCase) || p == null || paused || !long.TryParse(p.windowId, out handle)) { Output(serializer.Serialize(new { t = "capture", ok = false })); return; }
+        var window = new IntPtr(handle);
+        if (IsIconic(window) || !GetWindowRect(window, out outer)) { Output(serializer.Serialize(new { t = "capture", ok = false })); return; }
+        var whole = Rectangle.FromLTRB(outer.Left, outer.Top, outer.Right, outer.Bottom);
+        var part = Rectangle.Intersect(Rectangle.Intersect(Visible(window), Screen.PrimaryScreen.Bounds), whole);
+        if (part.Width < 8 || part.Height < 8) { Output(serializer.Serialize(new { t = "capture", ok = false })); return; }
+        using (var image = new Bitmap(whole.Width, whole.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb)) {
+            using (var g = Graphics.FromImage(image)) { var dc = g.GetHdc(); try { PrintWindow(window, dc, 2); } finally { g.ReleaseHdc(dc); } }
+            using (var crop = image.Clone(new Rectangle(part.X - whole.X, part.Y - whole.Y, part.Width, part.Height), System.Drawing.Imaging.PixelFormat.Format24bppRgb)) crop.Save(full, System.Drawing.Imaging.ImageFormat.Png);
+        }
+        Output(serializer.Serialize(new { t = "capture", ok = true, file = full, rect = new { x = part.X, y = part.Y, w = part.Width, h = part.Height } }));
     }
     void PaintPill() {
         if (current == null) return;
@@ -180,12 +247,14 @@ class ComputerOverlay : ApplicationContext
         if (long.TryParse(current.windowId, out handle)) GetWindowText(new IntPtr(handle), name, name.Capacity);
         title.Text = paused ? (handedOff ? "You're in control" : "Computer Use paused") : "zer0ne controls " + (name.Length > 0 ? name.ToString() : "this app");
         string fullTitle = title.Text;
+        stateTitle = name.Length > 0 ? name.ToString() : "this app"; stateDark = dark;
         while (title.Text.Length > 2 && TextRenderer.MeasureText(title.Text, title.Font).Width > title.Width) title.Text = title.Text.Substring(0, title.Text.Length - 2) + "\u2026";
         title.AccessibleName = fullTitle;
         detail.Text = paused ? "Resume explicitly in app permissions" : ActionName(current.action) + "  |  Ctrl + Alt + Esc to stop";
         pause.Text = paused ? "Resume..." : "Pause"; pause.AccessibleName = paused ? "Open Computer Use permissions to resume" : "Pause Computer Use";
         pause.BackColor = dark ? Color.FromArgb(39, 56, 79) : Color.FromArgb(220, 232, 251); pause.ForeColor = title.ForeColor;
         stop.BackColor = dark ? Color.FromArgb(67, 35, 42) : Color.FromArgb(253, 227, 230); stop.ForeColor = dark ? Color.FromArgb(255, 155, 160) : Color.FromArgb(159, 42, 55);
+        if (designMode) { pill.Conceal(); return; }
         if (!pill.IsShown) pill.Present(); pill.Invalidate();
     }
     public static string ActionName(string action) {
@@ -196,7 +265,7 @@ class ComputerOverlay : ApplicationContext
             default: return "Checking the screen";
         }
     }
-    void Clear() { watching = false; current = null; outline.Conceal(); pill.Conceal(); timer.Interval = 200; }
+    void Clear() { watching = false; current = null; outline.Conceal(); pill.Conceal(); timer.Interval = 200; Emit(); }
     protected override void Dispose(bool disposing) {
         watching = false; timer.Stop();
         if (mouseHook != IntPtr.Zero) UnhookWindowsHookEx(mouseHook);
@@ -208,7 +277,7 @@ class ComputerOverlay : ApplicationContext
         try {
             SetProcessDPIAware(); Application.EnableVisualStyles(); Console.InputEncoding = Encoding.UTF8;
             using (var context = new ComputerOverlay(args[0], int.Parse(args[1]))) {
-                System.Threading.Tasks.Task.Run(delegate { while (Console.ReadLine() != null) {} context.stopping = true; });
+                System.Threading.Tasks.Task.Run(delegate { string line; while ((line = Console.ReadLine()) != null) context.Command(line); context.stopping = true; });
                 Application.Run(context);
             }
             return 0;

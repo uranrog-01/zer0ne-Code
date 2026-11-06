@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Settings → **Features** is one grouped list: each feature has a plain description, a switch and, where it has more settings, a Configure link. A summary shows how many are on and what needs your attention, filters show On, Off, Needs attention or Advanced, and extra options appear only once a feature is on. Checks and project runs have their own tab; local language server, code index and browser check files sit under Advanced setup.
+- Computer Use has a **Stay ready after restart** switch, off by default: on, it resumes by itself when zer0ne starts for the apps you allowed, instead of waiting for Resume. Moving your mouse or typing still pauses it, and Stop still stops it.
+- Computer Use asks in the chat before using an app you have not allowed yet, and after a restart asks to resume; **Full access** allows the app and resumes without asking. Your own Stop, Pause or mouse and keyboard takeover is never resumed by the agent. `apps` also lists other open apps by name only, never their window titles.
+- Security: the agent can no longer allow, capture or control zer0ne's own window, which would let it answer its own approvals. It is left out of the agent's app list, and the input helper refuses it.
+- Security: allowing a Store app such as Calculator for Computer Use allowed every Store app, because Windows shows them all through one host process. Each Store app is now identified by its own program; a Store app allowed before this fix has to be allowed again.
+- When Computer Use can't act because no app is allowed or it is paused, the chat now says which of the two is missing, and its Next step button opens Computer Use permissions instead of Browser settings.
+- **Browser & Computer Use**: Computer Use settings (on/off, Design cursor effects, screenshot history and app permissions) are now on the browser page, renamed Browser & Computer Use in the desktop app.
+
+- Computer Use permissions have a **Design cursor effects** switch, off by default (off keeps the classic outline and pointer). On, one design-tool cursor replaces the outline: it redraws the controlled window with boxes, size badges, rulers, a guide and typed text, redraws only what changed after each action, and marks each click with the element's box and size. A bar on the window names the app and keeps Pause and Stop. Each action waits until its cursor is on screen. The effects are never in the model's screenshots, and reduced motion or high contrast keeps the classic outline.
+
 ## 0.3.0
 
 - Security: with **Hide secrets from agent commands** on, agent commands and helper processes no longer receive Git's `GIT_CONFIG_COUNT` / `GIT_CONFIG_VALUE_<n>` variables after their `GIT_CONFIG_KEY_<n>` names were removed. A value such as an `http.extraheader` authorization header was passed through, and every `git` command failed with "missing config key".

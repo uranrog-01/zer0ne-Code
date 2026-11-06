@@ -1,23 +1,78 @@
 (function () {
 	'use strict';
-	window.SettingsFeatures = { create({ I, S, capabilityHeader, capabilityStats, capabilityTabs, esc, featureHealth, featureItems, featureStatus, h, healthPanel, indexSection, openDialog, post, renderPage, requestFeaturesHealth, since, sw }) {
+	window.SettingsFeatures = { create({ I, S, capabilityHeader, capabilityTabs, esc, featureHealth, featureItems, featureStatus, h, healthPanel, indexSection, openDialog, post, renderPage, requestFeaturesHealth, since, sw }) {
 	const benchmarkProfiles = window.SettingsBenchmarkProfiles.create({ S, esc, post, renderPage });
 	function minutesPick(label, setting, options, fallback, enabled) {
 		const current = Number(S.settings[setting] || fallback);
 		return '<label class="fc-extra">' + esc(label) + '<select class="select" data-setting="' + setting + '" data-num="1"' + (!enabled ? ' disabled' : '') + '>' + options.map(v => '<option value="' + v + '"' + (current === v ? ' selected' : '') + '>' + v + ' min</option>').join('') + '</select></label>';
 	}
-	function featureCard(definition) {
+	// One line each, in plain words: what the group is for.
+	const GROUPS = {
+		'Context & efficiency': ['layers', 'Keep long chats fast, focused and affordable.'],
+		'Coding': ['code', 'Understand, search and check your project.'],
+		'Research & interaction': ['globe', 'The web, a browser of its own, images and the apps on your computer.'],
+		'Background work': ['clock', 'How background agents and long commands report back.'],
+		'Integrations': ['puzzle', 'Tool servers, skills and your phone.'],
+		'Editor': ['command', 'Available in the editor extension.']
+	};
+	const FILTERS = [['all', 'All'], ['on', 'On'], ['off', 'Off'], ['setup', 'Needs attention'], ['advanced', 'Advanced']];
+	const needsYou = (definition) => !!S.settings[definition.key] && ['setup', 'problem'].includes(featureStatus(definition).kind);
+	function filterOf() {
+		const filter = S.featureFilter === 'enabled' ? 'on' : S.featureFilter === 'problem' ? 'setup' : S.featureFilter;
+		return FILTERS.some(([value]) => value === filter) ? filter : 'all';
+	}
+	function featureRow(definition) {
 		const key = definition.key, enabled = !!S.settings[key], status = featureStatus(definition), health = featureHealth(definition);
 		const dependencies = (definition.requires || []).filter(k => !S.settings[k]);
-		const configure = key === 'computerUse' ? '<button class="link-btn" data-computer-use>Manage app permissions ' + I('chevronRight') + '</button>' : definition.configure && definition.configure !== 'features' ? '<button class="link-btn" data-nav-to="' + esc(definition.configure) + '">Configure ' + I('chevronRight') + '</button>' : '';
-		const action = definition.action ? '<button class="btn btn-secondary btn-sm" data-act="feature-' + (definition.action === 'language' ? 'language-connect' : 'plan') + '" data-kind="' + esc(definition.action) + '"' + (!enabled || dependencies.length || S.featureRunning || !S.workspace?.path || S.mode === 'chat' && definition.action !== 'language' ? ' disabled' : '') + '>' + (definition.action === 'language' ? 'Test connection' : 'Preview run') + '</button>' : '';
-		const extras = key === 'autoCompact' ? '<label class="fc-extra">Compact at<input type="range" class="range" id="s-compactThreshold" data-setting="compactThreshold" min="50" max="95" step="5" value="' + (S.settings.compactThreshold || 80) + '"' + (!enabled ? ' disabled' : '') + '><b id="compact-val">' + (S.settings.compactThreshold || 80) + '%</b></label><label class="fc-extra">or at most<select class="select" data-setting="compactMaxTokens" data-num="1"' +(!enabled ? ' disabled' : '') + '>' + [[0, 'no token limit'], [100000, '100k tokens'], [200000, '200k tokens'], [300000, '300k tokens'], [500000, '500k tokens']].map(([v, l]) => '<option value="' + v + '"' + (Number(S.settings.compactMaxTokens ?? 200000) === v ? ' selected' : '') + '>' + l + '</option>').join('') + '</select></label>' : key === 'cacheWarm' ? '<label class="fc-extra">Lifetime<select class="select" data-setting="cacheTtl"><option value="5m"' + (S.settings.cacheTtl !== '1h' ? ' selected' : '') + '>5 minutes</option><option value="1h"' + (S.settings.cacheTtl === '1h' ? ' selected' : '') + '>1 hour · higher write cost</option></select></label>' : key === 'skills' ? '<label class="fc-extra">Prompt budget<input type="range" class="range" data-setting="skillCatalogChars" min="2000" max="40000" step="1000" value="' + (S.settings.skillCatalogChars || 12000) + '"' + (!enabled ? ' disabled' : '') + '><b id="skill-budget-val">' + Math.round((S.settings.skillCatalogChars || 12000)/1000) + 'k</b></label>' : key === 'imageGenerate' ? '<label class="fc-extra">Image model<input class="input mono" data-setting="imageGenModel" value="' + esc(S.settings.imageGenModel || '') + '" placeholder="provider/model — empty uses the local Studio"' + (!enabled ? ' disabled' : '') + '></label>' : key === 'agentWatchdog' ? minutesPick('Stalled after', 'watchdogStallMinutes', [5, 10, 20, 30, 60], 10, enabled) : key === 'eventSources' ? minutesPick('Check every', 'eventPollMinutes', [2, 5, 10, 30, 60], 5, enabled) + '<label class="fc-extra"><input type="checkbox" data-setting="eventAutoAct"' + (S.settings.eventAutoAct ? ' checked' : '') + (!enabled ? ' disabled' : '') + '>Hand events to the agent — off, it only records what it would hand over (recall list shows it)</label>' +
+		const configure = definition.configure && definition.configure !== 'features' ? '<button class="link-btn fx-configure" data-nav-to="' + esc(definition.configure) + '">Configure ' + I('chevronRight') + '</button>' : '';
+		const action = definition.action && enabled ? '<button class="btn btn-secondary btn-sm" data-act="feature-' + (definition.action === 'language' ? 'language-connect' : 'plan') + '" data-kind="' + esc(definition.action) + '"' + (dependencies.length || S.featureRunning || !S.workspace?.path || S.mode === 'chat' && definition.action !== 'language' ? ' disabled' : '') + '>' + (definition.action === 'language' ? 'Test connection' : 'Preview run') + '</button>' : '';
+		// Only something that needs you, or the latest run, earns a label; a plain "on" needs none.
+		const pill = enabled && (needsYou(definition) || /^(Last run|Running|Run cancelled)/.test(status.label)) ? '<span class="feature-state is-' + status.kind + '">' + esc(status.label) + '</span>' : '';
+		const tags = (definition.scope === 'project' ? '<span class="fx-tag">This project</span>' : '') + (definition.advanced ? '<span class="fx-tag">Advanced</span>' : '');
+		const extras = enabled ? featureExtras(key, enabled) : '';
+		// Check details only where something needs you; the Checks & runs tab lists them all.
+		const more = extras + (health && enabled && needsYou(definition) ? '<details class="fx-details" data-key="feature-evidence-' + esc(key) + '"><summary>Check details' + (S.health?.stale ? ' · out of date' : '') + '</summary><p>' + esc(health.detail) + '</p><small>' + esc(health.evidence || 'Configuration') + ' · ' + esc(since(health.checkedAt || S.health.at)) + '</small></details>' : '') + (action ? '<div class="fx-actions">' + action + '</div>' : '');
+		return '<article class="fx-row' + (enabled ? ' on' : '') + (pill && needsYou(definition) ? ' attention' : '') + '" data-feature="' + esc(key) + '"><span class="fx-icon">' + I(definition.icon) + '</span><div class="fx-main"><div class="fx-title"><span class="fx-name">' + esc(definition.name) + '</span>' + tags + pill + '</div><p class="fx-desc">' + esc(definition.description) + '</p>' +
+			(dependencies.length ? '<p class="fx-dependency">' + I('info') + 'Turn on ' + esc(dependencies.map(k => featureItems().find(f => f.key === k)?.name || (k === 'commandTool' ? 'Terminal commands (Settings › Agent)' : k)).join(' and ')) + ' first.</p>' : '') +
+			(more ? '<div class="fx-more">' + more + '</div>' : '') + '</div><div class="fx-side">' + configure + sw(key) + '</div></article>';
+	}
+	function featureExtras(key, enabled) {
+		return key === 'autoCompact' ? '<label class="fc-extra">Compact at<input type="range" class="range" id="s-compactThreshold" data-setting="compactThreshold" min="50" max="95" step="5" value="' + (S.settings.compactThreshold || 80) + '"' + (!enabled ? ' disabled' : '') + '><b id="compact-val">' + (S.settings.compactThreshold || 80) + '%</b></label><label class="fc-extra">or at most<select class="select" data-setting="compactMaxTokens" data-num="1"' +(!enabled ? ' disabled' : '') + '>' + [[0, 'no token limit'], [100000, '100k tokens'], [200000, '200k tokens'], [300000, '300k tokens'], [500000, '500k tokens']].map(([v, l]) => '<option value="' + v + '"' + (Number(S.settings.compactMaxTokens ?? 200000) === v ? ' selected' : '') + '>' + l + '</option>').join('') + '</select></label>' : key === 'cacheWarm' ? '<label class="fc-extra">Lifetime<select class="select" data-setting="cacheTtl"><option value="5m"' + (S.settings.cacheTtl !== '1h' ? ' selected' : '') + '>5 minutes</option><option value="1h"' + (S.settings.cacheTtl === '1h' ? ' selected' : '') + '>1 hour · higher write cost</option></select></label>' : key === 'skills' ? '<label class="fc-extra">Prompt budget<input type="range" class="range" data-setting="skillCatalogChars" min="2000" max="40000" step="1000" value="' + (S.settings.skillCatalogChars || 12000) + '"' + (!enabled ? ' disabled' : '') + '><b id="skill-budget-val">' + Math.round((S.settings.skillCatalogChars || 12000)/1000) + 'k</b></label>' : key === 'imageGenerate' ? '<label class="fc-extra">Image model<input class="input mono" data-setting="imageGenModel" value="' + esc(S.settings.imageGenModel || '') + '" placeholder="provider/model — empty uses the local Studio"' + (!enabled ? ' disabled' : '') + '></label>' : key === 'agentWatchdog' ? minutesPick('Stalled after', 'watchdogStallMinutes', [5, 10, 20, 30, 60], 10, enabled) : key === 'eventSources' ? minutesPick('Check every', 'eventPollMinutes', [2, 5, 10, 30, 60], 5, enabled) + '<label class="fc-extra"><input type="checkbox" data-setting="eventAutoAct"' + (S.settings.eventAutoAct ? ' checked' : '') + (!enabled ? ' disabled' : '') + '>Hand events to the agent — off, it only records what it would hand over (recall list shows it)</label>' +
 				'<label class="fc-extra">Ask it with<input class="input mono" data-setting="eventMention" value="' + esc(S.settings.eventMention ?? '@zer0ne') + '" placeholder="@zer0ne"' + (!enabled ? ' disabled' : '') + '></label>' +
 				'<label class="fc-extra">Others who may ask<input class="input mono" data-setting="eventAllowed" value="' + esc(S.settings.eventAllowed || '') + '" placeholder="GitHub logins, comma-separated — you always may"' + (!enabled ? ' disabled' : '') + '></label><label class="fc-extra fc-extra-block">Policy — what to do with a CI failure or a review<textarea class="input" rows="4" data-setting="eventPolicy"' + (!enabled ? ' disabled' : '') + '>' + esc(S.settings.eventPolicy || '') + '</textarea></label>' : '';
-		return '<article class="feature-card feature-hub-card' + (enabled ? ' on' : '') + '" data-feature="' + esc(key) + '"><div class="fc-head"><span class="fc-icon">' + I(definition.icon) + '</span><span class="fc-name">' + esc(definition.name) + '</span>' + sw(key) + '</div><div class="feature-card-meta"><span class="feature-state is-' + status.kind + '">' + esc(status.label) + '</span><span>' + esc(definition.scope) + (definition.advanced ? ' · Advanced' : '') + '</span></div><p class="fc-desc">' + esc(definition.description) + '</p>' +
-			(dependencies.length ? '<p class="feature-dependency">Requires ' + esc(dependencies.map(k => featureItems().find(f => f.key === k)?.name || (k === 'commandTool' ? 'Terminal commands in Agent settings' : k)).join(', ')) + '</p>' : '') +
-			(health && enabled ? '<details data-key="feature-evidence-' + esc(key) + '"><summary>Check details' + (S.health?.stale ? ' · stale' : '') + '</summary><p>' + esc(health.detail) + '</p><small>' + esc(health.evidence || 'Configuration') + ' · ' + esc(since(health.checkedAt || S.health.at)) + '</small></details>' : '') + extras +
-			(configure || action ? '<div class="feature-card-actions">' + configure + action + '</div>' : '') + '</article>';
+	}
+	/** How many are on, what needs you, and when the setup was last checked; one line, not a dashboard. */
+	function summary(definitions) {
+		const on = definitions.filter(f => S.settings[f.key]).length, attention = definitions.filter(needsYou), health = S.health;
+		const checked = S.healthBusy ? 'Checking your setup…' : S.featureHealthError ? esc(S.featureHealthError) : health ? esc(health.stale ? 'Settings changed since the last check' : 'Setup checked ' + since(health.at)) : 'Setup not checked yet';
+		const pct = definitions.length ? Math.round(on / definitions.length * 100) : 0;
+		return h('section', 'fx-summary', '<div class="fx-meter" style="--p:' + pct + '" role="img" aria-label="' + on + ' of ' + definitions.length + ' features on"><b>' + on + '</b></div><div class="fx-summary-text"><b>' + on + ' of ' + definitions.length + ' features on</b><span>' + (attention.length ? '<i class="fx-dot warn"></i>' + attention.length + (attention.length === 1 ? ' needs' : ' need') + ' your attention · ' : '<i class="fx-dot ok"></i>') + checked + '</span></div><div class="fx-summary-actions">' +
+			(attention.length ? '<button class="btn btn-secondary btn-sm" data-feature-filter="setup">Review ' + attention.length + '</button>' : '') +
+			'<button class="btn btn-ghost btn-sm" data-act="features-check"' + (S.healthBusy ? ' disabled' : '') + '>' + I('refresh') + 'Check now</button>' + (S.healthBusy ? '<button class="btn btn-ghost btn-sm" data-act="features-cancel">Cancel</button>' : '') +
+			(S.featureRunning ? '<button class="btn btn-secondary btn-sm" data-act="feature-stop">Stop current run</button>' : '') + '</div>');
+	}
+	function featureList(definitions) {
+		const wrap = h('div', 'fx-features');
+		const toolbar = h('div', 'fx-toolbar');
+		const results = h('div', 'fx-results');
+		const refresh = () => {
+			const query = (S.featureQuery || '').trim().toLowerCase(), filter = filterOf();
+			const shown = definitions.filter(f => (!query || (f.name + ' ' + f.description + ' ' + f.group).toLowerCase().includes(query)) && (filter === 'all' || filter === 'on' && S.settings[f.key] || filter === 'off' && !S.settings[f.key] || filter === 'advanced' && f.advanced || filter === 'setup' && needsYou(f)));
+			for (const chip of toolbar.querySelectorAll('[data-feature-filter]')) chip.setAttribute('aria-pressed', String(chip.dataset.featureFilter === filter));
+			results.replaceChildren();
+			for (const group of [...new Set(shown.map(f => f.group))]) {
+				const all = definitions.filter(f => f.group === group), [icon, about] = GROUPS[group] || ['zap', ''];
+				results.appendChild(h('section', 'fx-group', '<header class="fx-group-head"><span class="fx-group-icon">' + I(icon) + '</span><div><h3>' + esc(group) + '</h3>' + (about ? '<p>' + esc(about) + '</p>' : '') + '</div><span class="fx-group-count">' + all.filter(f => S.settings[f.key]).length + ' of ' + all.length + ' on</span></header><div class="fx-list">' + shown.filter(f => f.group === group).map(featureRow).join('') + '</div>'));
+			}
+			if (!shown.length) results.appendChild(h('div', 'empty-state', filter === 'setup' && !query ? '<b>Nothing needs your attention</b><p>Everything you turned on is set up.</p>' : '<b>No features match</b><p>Try another word, or show all features.</p>'));
+		};
+		toolbar.innerHTML = '<label class="fx-search">' + I('search') + '<input class="input" id="feature-search" type="search" placeholder="Search features" value="' + esc(S.featureQuery || '') + '" aria-label="Search features"></label><div class="fx-filters" role="group" aria-label="Show">' + FILTERS.map(([value, label]) => '<button type="button" class="fx-chip" data-feature-filter="' + value + '">' + label + '</button>').join('') + '</div>';
+		toolbar.querySelector('#feature-search').addEventListener('input', event => { if (event.isComposing) return; S.featureQuery = event.target.value; refresh(); });
+		toolbar.querySelector('#feature-search').addEventListener('compositionend', event => { S.featureQuery = event.target.value; refresh(); });
+		toolbar.addEventListener('click', event => { const chip = event.target.closest('[data-feature-filter]'); if (chip) { S.featureFilter = chip.dataset.featureFilter; refresh(); } });
+		wrap.append(toolbar, results);
+		refresh();
+		return wrap;
 	}
 	function featureReports() {
 		const section = h('section','feature-reports');
@@ -104,44 +159,29 @@
 	}
 	function featuresPage() {
 		const root = h('div','page features-hub'), definitions = featureItems();
-		const counts = {on:definitions.filter(f => S.settings[f.key]).length,attention:definitions.filter(f => ['setup','problem'].includes(featureStatus(f).kind)).length};
-		root.appendChild(capabilityHeader('Features','zap','Configure capabilities for your project and model. Inspect evidence, then choose when to run execution tests.',''));
-		root.appendChild(capabilityStats([[definitions.length,'Capabilities','zap'],[counts.on,'Enabled','check'],[counts.attention,'Need attention','alert'],[(S.featureReports || []).length,'Project runs','terminal']]));
-		root.appendChild(h('div','feature-scope',I('folder') + '<span>' + esc(S.featureRoot || S.workspace?.path || 'Current project') + '</span><span class="feature-scope-model">' + esc((S.providers || []).find(p => p.id === S.selection.providerId)?.name || 'No provider') + ' · ' + esc(S.selection.model || 'No model selected') + '</span>'));
-		root.appendChild(capabilityTabs([['overview','Overview'],['capabilities','Capabilities'],['checks','Checks & activity'],['benchmark','Benchmark']],S.featureTab || 'overview','data-feature-tab','Features views'));
-		if (S.featureTab === 'benchmark') { root.appendChild(benchmarkPanel()); return root; }
-		root.appendChild(healthPanel());
+		// Older links and search results name the former Overview and Capabilities tabs.
+		const tab = S.featureTab === 'checks' || S.featureTab === 'benchmark' ? S.featureTab : 'features';
+		root.appendChild(capabilityHeader('Features','zap','Choose what your agent can do. Switches apply from the next message; nothing here runs project scripts until you review it.',''));
+		root.appendChild(capabilityTabs([['features','Features'],['checks','Checks & runs'],['benchmark','Benchmark']],tab,'data-feature-tab','Features views'));
+		if (tab === 'benchmark') { root.appendChild(benchmarkPanel()); return root; }
 		if (!S.featureLoaded) { S.featureLoaded = true; post({type:'featureDashboard'}); }
 		if (!S.healthBusy && !S.featureHealthError && (!S.health || S.health.stale || Date.now()-S.health.at > 600000)) requestFeaturesHealth(false);
 		if (!S.featureTick) S.featureTick = setInterval(() => { if (S.open && S.section === 'features' && !document.hidden && !S.healthBusy && (!S.health || Date.now()-S.health.at > 600000)) { requestFeaturesHealth(false); renderPage(); } },60000);
-		if ((S.featureTab || 'overview') === 'capabilities') {
-			const toolbar = h('div','feature-toolbar');
-			const results = h('div', 'feature-results');
-			const refresh = () => {
-				const query = (S.featureQuery || '').trim().toLowerCase(), filter = S.featureFilter || 'all';
-				const shown = definitions.filter(f => (!query || (f.name + ' ' + f.description + ' ' + f.group).toLowerCase().includes(query)) && (filter === 'all' || filter === 'enabled' && S.settings[f.key] || filter === 'advanced' && f.advanced || featureStatus(f).kind === filter));
-				results.replaceChildren();
-				for (const group of [...new Set(shown.map(f => f.group))]) { results.appendChild(h('h3','feature-group-title',esc(group))); results.appendChild(h('div','feature-grid',shown.filter(f => f.group === group).map(featureCard).join(''))); }
-				if (!shown.length) results.appendChild(h('div','empty-state','No capabilities match. Try another search or filter.'));
-			};
-			toolbar.innerHTML = '<label class="feature-search">' + I('search') + '<input class="input" id="feature-search" type="search" placeholder="Search capabilities and tools" value="' + esc(S.featureQuery || '') + '" aria-label="Search features"></label><label>Show<select class="select" id="feature-filter">' + [['all','All'],['enabled','Enabled'],['setup','Needs setup'],['problem','Needs attention'],['advanced','Advanced']].map(([value,label]) => '<option value="' + value + '"' + ((S.featureFilter || 'all') === value ? ' selected' : '') + '>' + label + '</option>').join('') + '</select></label>';
-			toolbar.querySelector('#feature-search').addEventListener('input',event => { if (event.isComposing) return; S.featureQuery = event.target.value; refresh(); });
-			toolbar.querySelector('#feature-search').addEventListener('compositionend',event => { S.featureQuery = event.target.value; refresh(); });
-			toolbar.querySelector('#feature-filter').addEventListener('change',event => { S.featureFilter = event.target.value; refresh(); });
-			root.appendChild(toolbar);
-			refresh(); root.appendChild(results);
-			root.appendChild(featureLanguagePanel());
-			const index = h('details','card feature-index-settings'); index.dataset.key = 'feature-index'; index.appendChild(h('summary','','Code index & embeddings')); index.appendChild(indexSection()); root.appendChild(index);
-			root.appendChild(h('details','card feature-browser-config','<summary>Browser scenario format</summary><p>Save an array in <code>.zer0ne/browser-checks.json</code>. Supported assertions: text, title, url, selector and no-console-errors. URLs and assertions appear in the review before execution.</p><pre>' + esc(JSON.stringify([{name:'Home page',url:'http://localhost:3000',assertions:[{kind:'text',value:'Welcome'},{kind:'selector',value:'main'}]}],null,2)) + '</pre>'));
-		} else if (S.featureTab === 'checks') {
+		if (tab === 'checks') {
+			root.appendChild(h('div','feature-scope',I('folder') + '<span>' + esc(S.featureRoot || S.workspace?.path || 'Current project') + '</span><span class="feature-scope-model">' + esc((S.providers || []).find(p => p.id === S.selection.providerId)?.name || 'No provider') + ' · ' + esc(S.selection.model || 'No model selected') + '</span>'));
+			root.appendChild(healthPanel());
 			const results = h('div','feature-check-results');
 			results.innerHTML = (S.health?.items || []).map(item => '<details class="card" data-key="health-' + esc(item.id) + '"><summary><b>' + esc(item.label) + '</b><span class="feature-state is-' + (item.state === 'fail' ? 'problem' : item.readiness || 'unknown') + '">' + esc(item.state === 'off' ? 'Off' : item.evidence || 'Configuration') + '</span></summary><p>' + esc(item.detail) + '</p></details>').join(''); root.appendChild(results); root.appendChild(featureReports());
-		} else {
-			root.appendChild(h('div','feature-overview-copy','<h3>Start with a capability, finish with evidence</h3><p>Enabled settings describe intent. Configuration, discovery, measured usage and a successful execution are shown separately.</p><div class="feature-overview-actions"><button class="btn btn-primary" data-feature-tab="capabilities">Explore capabilities</button><button class="btn btn-secondary" data-feature-tab="checks">View checks & activity</button></div>'));
-			const attention = definitions.filter(f => ['setup','problem'].includes(featureStatus(f).kind));
-			if (attention.length) root.appendChild(h('div','feature-grid',attention.slice(0,6).map(featureCard).join('')));
-			root.appendChild(featureReports());
+			return root;
 		}
+		root.appendChild(summary(definitions));
+		root.addEventListener('click', event => { const review = event.target.closest('.fx-summary [data-feature-filter]'); if (review) { S.featureFilter = review.dataset.featureFilter; S.featureQuery = ''; renderPage(); } });
+		root.appendChild(featureList(definitions));
+		const advanced = h('section','fx-advanced','<h3 class="fx-section-title">Advanced setup</h3><p class="fx-section-desc">Local language server, code index and browser check files. Most people never need these.</p>');
+		advanced.appendChild(featureLanguagePanel());
+		const index = h('details','card feature-index-settings'); index.dataset.key = 'feature-index'; index.appendChild(h('summary','','Code index & embeddings')); index.appendChild(indexSection()); advanced.appendChild(index);
+		advanced.appendChild(h('details','card feature-browser-config','<summary>Browser scenario format</summary><p>Save an array in <code>.zer0ne/browser-checks.json</code>. Supported assertions: text, title, url, selector and no-console-errors. URLs and assertions appear in the review before execution.</p><pre>' + esc(JSON.stringify([{name:'Home page',url:'http://localhost:3000',assertions:[{kind:'text',value:'Welcome'},{kind:'selector',value:'main'}]}],null,2)) + '</pre>'));
+		root.appendChild(advanced);
 		return root;
 	}
 	function reviewFeaturePlan(plan) {

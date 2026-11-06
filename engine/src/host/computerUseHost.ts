@@ -24,7 +24,7 @@ export class ComputerUseHost implements HostFeature {
 		const policy = computerPolicy(this.storage), active = computerActivity(this.storage);
 		let shortcut = false;
 		try { const value = JSON.parse(fs.readFileSync(path.join(this.storage,'computer-use','shortcut.json'),'utf8')); if (value.registered && Number.isInteger(value.pid) && value.pid > 0) { process.kill(value.pid,0); shortcut = true; } } catch { /* Editor hosts and unavailable shortcuts use the visible Stop button. */ }
-		return {type:'computerUseState', supported:process.platform === 'win32', enabled:this.enabled, history:this.ctx.store.getSettings().computerScreenshotHistory, paused:policy.paused, shortcut, apps:policy.allowed.map(file => ({path:file,name:path.win32.basename(file,'.exe')})), active:active ? {action:active.action,at:active.at} : null};
+		return {type:'computerUseState', supported:process.platform === 'win32', enabled:this.enabled, history:this.ctx.store.getSettings().computerScreenshotHistory, effects:this.ctx.store.getSettings().computerEffects === 'design' ? 'design' : 'classic', stayReady:policy.resumeOnStart === true, paused:policy.paused, shortcut, apps:policy.allowed.map(file => ({path:file,name:path.win32.basename(file,'.exe')})), active:active ? {action:active.action,at:active.at} : null};
 	}
 	private publish() {
 		if (!this.surfaces.size) return;
@@ -35,7 +35,7 @@ export class ComputerUseHost implements HostFeature {
 		} catch (error) { for (const surface of this.surfaces) surface.post({type:'computerUseState',enabled:this.enabled,paused:true,apps:[],error:String(error)}); }
 	}
 	async handle(surface: HostSurface, msg: {type:string;[key:string]:unknown}): Promise<boolean> {
-		if (!['computerUseState','computerUseApps','computerUseAllow','computerUseRevoke','computerUseStop','computerUseResume'].includes(msg.type)) return false;
+		if (!['computerUseState','computerUseApps','computerUseAllow','computerUseRevoke','computerUseStop','computerUseResume','computerUseStayReady'].includes(msg.type)) return false;
 		if (surface.kind === 'remote') { surface.post({type:'computerUseError',message:'Computer Use permissions are managed on this computer.'}); return true; }
 		this.surfaces.add(surface);
 		try {
@@ -49,6 +49,9 @@ export class ComputerUseHost implements HostFeature {
 				changeComputerPolicy(this.storage,p => { p.allowed = p.allowed.filter(file => file !== msg.path); p.paused = true; });
 			} else if (msg.type === 'computerUseStop') {
 				stopComputer(this.storage);
+			} else if (msg.type === 'computerUseStayReady') {
+				// Only the choice changes: whether control is paused right now stays as it is.
+				changeComputerPolicy(this.storage,p => { p.resumeOnStart = msg.on === true; });
 			} else if (msg.type === 'computerUseResume') {
 				if (process.platform !== 'win32') throw new Error('App permissions currently require Windows.');
 				if (!this.ctx.store.getSettings().computerUse) throw new Error('Enable Computer Use first.');

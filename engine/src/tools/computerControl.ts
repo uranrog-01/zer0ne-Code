@@ -3,9 +3,9 @@ import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { acquireRuntimeLease } from '../runtimeLease';
 
-export interface ComputerPolicy { epoch: string; paused: boolean; allowed: string[]; stop?: string }
+export interface ComputerPolicy { epoch: string; paused: boolean; allowed: string[]; stop?: string; resumeOnStart?: boolean }
 export interface ComputerActivity { id: string; pid: number; action: string; session: string; at: number; epoch: string }
-export interface ComputerPresentation { id: string; pid: number; session: string; epoch: string; at: number; windowId: string; processId: number; action: string; x?: number; y?: number; theme?: string; reducedMotion?: boolean }
+export interface ComputerPresentation { id: string; pid: number; session: string; epoch: string; at: number; windowId: string; processId: number; action: string; x?: number; y?: number; theme?: string; reducedMotion?: boolean; effects?: string }
 export function presentComputer(storage: string, value: Omit<ComputerPresentation, 'id' | 'pid' | 'at'>): ComputerPresentation {
 	const p = { ...value, id: randomUUID(), pid: process.pid, at: Date.now() };
 	const dir = computerDirectory(storage), temp = path.join(dir, randomUUID() + '.tmp');
@@ -22,9 +22,9 @@ export function endComputerSession(storage: string, session: string): void {
 	catch { /* A different project may own the desktop, or no computer action ran. */ }
 	finally { release(); }
 }
-export async function awaitComputerMonitor(storage: string, id: string, epoch: string, signal: AbortSignal): Promise<void> {
+export async function awaitComputerMonitor(storage: string, id: string, epoch: string, signal: AbortSignal, wait = 5000): Promise<void> {
 	if (!fs.existsSync(path.join(computerDirectory(storage), 'monitor-required.json'))) return;
-	const end = Date.now() + 5000;
+	const end = Date.now() + wait;
 	while (Date.now() < end) {
 		signal.throwIfAborted();
 		try {
@@ -43,6 +43,19 @@ export function stopComputer(storage: string): void {
 	const temp = path.join(dir,randomUUID()+'.tmp');
 	try { fs.writeFileSync(temp,'stop:' + randomUUID(),{mode:0o600}); fs.renameSync(temp,path.join(dir,'stop')); }
 	finally { fs.rmSync(temp,{force:true}); }
+}
+/**
+ * Why control is not ready: no app allowed, permissions just changed, the app restarted, or the
+ * user stopped, paused or took over. The last is the user's own decision; the others may be
+ * resumed from the chat.
+ */
+export function computerPauseReason(storage: string): 'ready' | 'empty' | 'changed' | 'restart' | 'user' {
+	const p = computerPolicy(storage);
+	if (!p.allowed.length) return 'empty';
+	if (!p.paused) return 'ready';
+	const token = stopToken(storage);
+	if ((p.stop || '') !== token) return token === '' || token.startsWith('start:') ? 'restart' : 'user';
+	return 'changed';
 }
 function stopToken(storage: string): string { try { return fs.readFileSync(path.join(computerDirectory(storage),'stop'),'utf8'); } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return ''; throw error; } }
 export function computerPolicy(storage: string): ComputerPolicy {
@@ -86,8 +99,9 @@ export function computerActivity(storage: string): ComputerActivity | undefined 
 }
 export function beginComputerActivity(storage: string, action: string, session: string, signal: AbortSignal) {
 	const p = computerPolicy(storage);
-	if (p.paused) throw new Error('Computer Use is paused. Open Computer Use permissions and choose Resume.');
-	if (!p.allowed.length) throw new Error('Allow an app in Computer Use permissions first.');
+	// Only the user can allow an app or resume; say which of the two is missing.
+	if (!p.allowed.length) throw new Error('No app is allowed for Computer Use yet. Call computer with action apps, then screenshot with app set to the windowId of the app from available: that asks the user to allow it.');
+	if (p.paused) throw new Error('Computer Use is paused because the user stopped, paused or took over. Only the user can resume it, in Computer Use permissions. Do not retry until they say so.');
 	const id = randomUUID();
 	const abort = new AbortController(), dir = path.join(computerDirectory(storage), 'activity'), file = path.join(dir, id + '.json');
 	const check = () => {

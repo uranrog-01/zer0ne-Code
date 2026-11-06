@@ -9,6 +9,9 @@
  * a row's fixed actions (answer, stop, steer, check, undo, continue), ask about what was dropped
  * on it or copied, and pin the open panel (keyboard focus and drops) while you work there.
  * The tray panel may only pull its menu's data and send back one of its fixed keys.
+ * The Computer Use effects window may only say whether the pointer is over its bar, report
+ * that the visual for an action is on screen, and pause, stop or ask to resume (which opens the
+ * permissions; it never resumes by itself).
  * Anything else is refused.
  *
  * ARGUMENTS adds per-command argument checks (a command the page may call still
@@ -26,7 +29,8 @@ const ALLOWED = Object.freeze({
 	engine: new Set([...WINDOW, ...PROJECT, 'show_help', 'host_status', 'notify_feed', 'notify_read', 'zc_page_ready', 'glass_blur', 'glass_panels', 'desktop_wallpaper', 'glass_prefs', 'profile_backup', 'profile_restore']),
 	quick: new Set(['quick_target', 'quick_send', 'quick_close']),
 	notch: new Set(['notch_state', 'notch_hover', 'notch_open', 'notch_dismiss', 'notch_read', 'notch_act', 'notch_ask', 'notch_pin']),
-	tray: new Set(['tray_data', 'tray_action'])
+	tray: new Set(['tray_data', 'tray_action']),
+	effects: new Set(['effects_hover', 'effects_shown', 'effects_control'])
 });
 
 const NOTCH_ACTIONS = new Set(['approve', 'reject', 'deny', 'ask', 'answer', 'stop', 'steer', 'check', 'undo', 'continue']);
@@ -72,11 +76,15 @@ const ARGUMENTS = Object.freeze({
 	},
 	notch_pin: (args) => ({ on: args.on === true, height: v.num(0, 2000)(args.height) ?? 0 }),
 	// An action key the app minted with the panel's data; the app resolves it, never a path.
-	tray_action: (args) => (v.str(200)(args.key) ? { key: args.key } : undefined)
+	tray_action: (args) => (v.str(200)(args.key) ? { key: args.key } : undefined),
+	effects_hover: (args) => ({ on: args.on === true }),
+	// The id of the action the page drew; the app passes it on only when it is the current one.
+	effects_shown: (args) => (typeof args.id === 'string' && /^[\w-]{1,100}$/.test(args.id) ? { id: args.id } : undefined),
+	effects_control: (args) => (['pause', 'stop', 'resume'].includes(args.action) ? { action: args.action } : undefined)
 });
 
 /**
- * @param {'start' | 'engine' | 'quick' | 'notch'} page
+ * @param {'start' | 'engine' | 'quick' | 'notch' | 'tray' | 'effects'} page
  * @returns {boolean} whether the page may call the command
  */
 function allowed(page, command) {

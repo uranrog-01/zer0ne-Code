@@ -6,7 +6,7 @@ import { spawn } from 'child_process';
 import { setTimeout as delay } from 'timers/promises';
 import type { MessageImage, ToolDef } from '../chatClient';
 import { acquireRuntimeLease } from '../runtimeLease';
-import { awaitComputerMonitor, beginComputerActivity, computerPolicy, computerPolicyFile, presentComputer } from './computerControl';
+import { awaitComputerMonitor, beginComputerActivity, changeComputerPolicy, computerPauseReason, computerPolicy, computerPolicyFile, presentComputer } from './computerControl';
 
 const MAX_WIDTH = 1280;
 const ACTIONS = ['apps', 'screenshot', 'click', 'double_click', 'right_click', 'move', 'type', 'key', 'scroll'];
@@ -26,7 +26,16 @@ interface Options {
 	app?: string;
 	theme?: string;
 	reducedMotion?: boolean;
+	effects?: string;
+	/** How long the first screenshot after a grant waits for the controls, which may still be starting. */
+	monitorWait?: number;
 }
+type OpenWindow = { path: string; name: string; title: string; windowId: string; processId: number };
+/** A window the agent named: its windowId, executable path or name, or its exact title. */
+const named = (w: OpenWindow, app: string) => [w.windowId, w.path.toLowerCase(), w.name.toLowerCase(), w.title.toLowerCase()].includes(app.toLowerCase());
+const isAllowed = (allowed: string[], w: OpenWindow) => allowed.some(file => file.toLowerCase() === w.path.toLowerCase());
+/** zer0ne itself (the engine runs as the app's executable): never offered, allowed or controlled. */
+const isSelf = (w: OpenWindow) => w.path.toLowerCase() === process.execPath.toLowerCase();
 
 function desktopLease(opts: Options) {
 	const dir = path.join(opts.storageDir, 'computer-use');
@@ -42,7 +51,7 @@ function desktopLease(opts: Options) {
 export function computerToolDef(): ToolDef {
 	return {
 		name: 'computer',
-			description: 'See and control an app allowed by the user in Computer Use permissions. Windows only. Use apps to list allowed open windows, then screenshot with app set to its windowId. Take a screenshot before EVERY input action and use its pixel coordinates. Captures only that app window on the primary display. Full access skips action approvals but never app permissions or Stop. Prefer files, terminal or browser tools whenever they can do the job.',
+			description: 'See and control a Windows app on the user\'s computer. Use apps to list allowed open windows (windows) and other open apps (available), then screenshot with app set to a windowId. Screenshotting an app that is not allowed yet asks the user to allow it (Full access allows it without asking); after a restart a screenshot asks to resume the same way. If the user stopped, paused or took over, only they can resume. Take a screenshot before EVERY input action and use its pixel coordinates. Captures only that app window on the primary display. Prefer files, terminal or browser tools whenever they can do the job.',
 		parameters: { type: 'object', additionalProperties: false, required: ['action'], properties: {
 			action: { type: 'string', enum: ACTIONS },
 			app: { type:'string', maxLength:4096, description:'screenshot: windowId from apps, executable name, or exact executable path. Omit to capture the focused allowed app.' },
@@ -111,11 +120,11 @@ async function screenshot(opts: Options): Promise<{ image: MessageImage; geometr
 		const target: string[] = [];
 		if (opts.app) {
 			const allowed = computerPolicy(opts.storageDir).allowed;
-			const matches = (await computerWindows(opts)).filter(w => allowed.some(file => file.toLowerCase() === w.path.toLowerCase()) && [w.windowId,w.path.toLowerCase(),w.name.toLowerCase()].includes(opts.app!.toLowerCase()));
+			const matches = (await computerWindows(opts)).filter(w => isAllowed(allowed, w) && named(w, opts.app!));
 			if (matches.length !== 1) throw new Error('Choose one allowed open windowId from computer apps, then take a screenshot.');
 			target.push('--focus',`${matches[0].windowId},${matches[0].processId}`);
 		}
-		const r = await run(await winHelper(opts), ['screenshot', jpg, String(MAX_WIDTH), '--policy', computerPolicyFile(opts.storageDir), '--epoch', opts.epoch!, ...target], opts.signal);
+		const r = await run(await winHelper(opts), ['screenshot', jpg, String(MAX_WIDTH), '--policy', computerPolicyFile(opts.storageDir), '--epoch', opts.epoch!, '--deny', process.execPath, ...target], opts.signal);
 		const dims = geometry(JSON.parse(r.out));
 		if (typeof dims.windowId !== 'string' || !/^[1-9]\d*$/.test(dims.windowId) || typeof dims.processId !== 'number' || !Number.isInteger(dims.processId) || dims.processId <= 0) throw new Error('Screenshot returned no active window. Take a new screenshot.');
 		opts.signal.throwIfAborted();
@@ -128,7 +137,7 @@ async function act(action: string, x: number, y: number, text: string, keys: str
 	const args = action === 'type' ? ['type'] : action === 'key' ? ['key', keys] : action === 'scroll' ? ['scroll', String(x), String(y), String(amount)] : action === 'move' ? ['move', String(x), String(y)] : ['click', String(x), String(y), action === 'right_click' ? 'right' : 'left', action === 'double_click' ? '2' : '1'];
 	args.push('--bounds', [shot.left, shot.top, shot.screenWidth, shot.screenHeight].join(','));
 	args.push('--focus', `${shot.windowId},${shot.processId}`);
-	args.push('--policy', computerPolicyFile(opts.storageDir), '--epoch', opts.epoch!);
+	args.push('--policy', computerPolicyFile(opts.storageDir), '--epoch', opts.epoch!, '--deny', process.execPath);
 	await run(exe, args, opts.signal, action === 'type' ? text : undefined);
 }
 
@@ -147,13 +156,46 @@ export async function runComputer(args: Record<string, unknown>, opts: Options) 
 	if (process.platform !== 'win32') throw new Error('Computer Use app permissions currently require Windows. macOS and Linux control is unavailable.');
 	if (typeof args.action !== 'string' || !ACTIONS.includes(args.action)) throw new Error('Unknown computer action.');
 	if (args.action === 'apps') {
-		const policy = computerPolicy(opts.storageDir), windows = (await computerWindows(opts)).filter(w => policy.allowed.some(file => file.toLowerCase() === w.path.toLowerCase()));
-		return {api:JSON.stringify({paused:policy.paused,windows}),summary:'allowed apps'};
+		const policy = computerPolicy(opts.storageDir), all = (await computerWindows(opts)).filter(w => !isSelf(w)), seen = new Set<string>();
+		const windows = all.filter(w => isAllowed(policy.allowed, w));
+		// Other open apps by name only: their window titles can hold private content.
+		const available = all.filter(w => !isAllowed(policy.allowed, w) && !seen.has(w.path.toLowerCase()) && seen.add(w.path.toLowerCase())).map(w => ({name:w.name, windowId:w.windowId}));
+		return {api:JSON.stringify({paused:policy.paused, windows, available}),summary:'allowed apps'};
 	}
 	if (args.app !== undefined && (typeof args.app !== 'string' || !args.app || args.app.length > 4096 || args.app.includes('\0'))) throw new Error('Choose an allowed app name or windowId.');
+	// Only an action that may need an approval waits; others claim the desktop at once, so a Stop
+	// at any moment finds them.
+	const reason = computerPauseReason(opts.storageDir);
+	const grant = reason !== 'user' && (reason === 'changed' || reason === 'restart' || args.action === 'screenshot' && typeof args.app === 'string') ? await grantAccess(args, opts) : 'none';
+	if (grant === 'declined') return {api:'The user did not allow this. Do not ask again unless they ask you to use Computer Use.', summary:'not allowed', error:true};
 	const activity = beginComputerActivity(opts.storageDir, String(args.action), opts.sessionId, opts.signal);
-	try { const result = await runComputerAction(args, {...opts, signal:activity.signal, epoch:activity.epoch, app:args.app as string | undefined}); activity.check(); activity.signal.throwIfAborted(); return result; }
+	try { const result = await runComputerAction(args, {...opts, signal:activity.signal, epoch:activity.epoch, app:args.app as string | undefined, monitorWait:grant === 'granted' ? 20000 : undefined}); activity.check(); activity.signal.throwIfAborted(); return result; }
 	finally { activity.close(); }
+}
+
+/**
+ * Asks in the chat to allow the app a screenshot names, or to resume after a restart or a
+ * permission change; Full access approves without asking. The user's own Stop, Pause or
+ * takeover is never resumed here: only the user resumes it, in Computer Use permissions.
+ */
+async function grantAccess(args: Record<string, unknown>, opts: Options): Promise<'none' | 'granted' | 'declined'> {
+	const reason = computerPauseReason(opts.storageDir);
+	if (reason === 'user') return 'none';
+	let add: OpenWindow | undefined;
+	if (args.action === 'screenshot' && typeof args.app === 'string') {
+		const policy = computerPolicy(opts.storageDir), matches = (await computerWindows(opts)).filter(w => !isSelf(w) && named(w, args.app as string));
+		const paths = new Set(matches.map(w => w.path.toLowerCase()));
+		if (matches.length && paths.size === 1 && !matches.some(w => isAllowed(policy.allowed, w))) add = matches[0];
+	}
+	if (!add && (reason === 'ready' || reason === 'empty')) return 'none';
+	const names = add ? add.name : computerPolicy(opts.storageDir).allowed.map(file => path.win32.basename(file, '.exe')).join(', ');
+	const label = add ? `computer: allow ${add.name} for Computer Use (${add.path})` : `computer: resume Computer Use for ${names}`;
+	if (!await opts.approve(label, opts.signal)) return 'declined';
+	opts.signal.throwIfAborted();
+	// The user may have stopped it while the approval was open.
+	if (computerPauseReason(opts.storageDir) === 'user') return 'none';
+	changeComputerPolicy(opts.storageDir, p => { if (add && !p.allowed.some(file => file.toLowerCase() === add!.path.toLowerCase())) { if (p.allowed.length >= 100) throw new Error('Too many apps are allowed. Remove one in Computer Use permissions.'); p.allowed.push(add.path); } p.paused = false; });
+	return 'granted';
 }
 
 async function runComputerAction(args: Record<string, unknown>, opts: Options): Promise<{ api: string; summary: string; images?: MessageImage[]; error?: boolean }> {
@@ -173,8 +215,8 @@ async function runComputerAction(args: Record<string, unknown>, opts: Options): 
 			const shot = await screenshot(opts);
 			if (shots.size >= 128) shots.delete(shots.keys().next().value!);
 			shots.set(scope, { ...shot.geometry, at: Date.now(), revision: desktop.read(), epoch:opts.epoch! });
-			const presentation = presentComputer(opts.storageDir, { session:opts.sessionId, epoch:opts.epoch!, windowId:shot.geometry.windowId!, processId:shot.geometry.processId!, action:'screenshot', theme:opts.theme, reducedMotion:opts.reducedMotion });
-			await awaitComputerMonitor(opts.storageDir, presentation.id, opts.epoch!, opts.signal);
+			const presentation = presentComputer(opts.storageDir, { session:opts.sessionId, epoch:opts.epoch!, windowId:shot.geometry.windowId!, processId:shot.geometry.processId!, action:'screenshot', theme:opts.theme, reducedMotion:opts.reducedMotion, effects:opts.effects });
+			await awaitComputerMonitor(opts.storageDir, presentation.id, opts.epoch!, opts.signal, opts.monitorWait);
 			return { api: `Screenshot (${shot.geometry.width}×${shot.geometry.height}) attached. Use its pixel coordinates.`, summary: 'screenshot', images: [shot.image] };
 		} finally { desktop?.release(); busy = false; }
 	}
@@ -193,7 +235,7 @@ async function runComputerAction(args: Record<string, unknown>, opts: Options): 
 	// approval has completed, with a fresh visual acknowledgement before input.
 	const approvalLease = desktopLease(opts);
 	let approvalPresentation: ReturnType<typeof presentComputer>;
-	try { approvalPresentation = presentComputer(opts.storageDir, { session:opts.sessionId, epoch:opts.epoch!, windowId:shot.windowId!, processId:shot.processId!, action:'approval', theme:opts.theme, reducedMotion:opts.reducedMotion }); }
+	try { approvalPresentation = presentComputer(opts.storageDir, { session:opts.sessionId, epoch:opts.epoch!, windowId:shot.windowId!, processId:shot.processId!, action:'approval', theme:opts.theme, reducedMotion:opts.reducedMotion, effects:opts.effects }); }
 	finally { approvalLease.release(); }
 	await awaitComputerMonitor(opts.storageDir, approvalPresentation.id, opts.epoch!, opts.signal);
 	let abortApproval!: () => void;
@@ -213,7 +255,7 @@ async function runComputerAction(args: Record<string, unknown>, opts: Options): 
 		desktop.invalidate();
 		const px = shot.left + Math.min(shot.screenWidth - 1, Math.round((x as number) * shot.screenWidth / shot.width));
 		const py = shot.top + Math.min(shot.screenHeight - 1, Math.round((y as number) * shot.screenHeight / shot.height));
-		const presentation = presentComputer(opts.storageDir, { session:opts.sessionId, epoch:opts.epoch!, windowId:shot.windowId!, processId:shot.processId!, action, x:needsXY ? px : undefined, y:needsXY ? py : undefined, theme:opts.theme, reducedMotion:opts.reducedMotion });
+		const presentation = presentComputer(opts.storageDir, { session:opts.sessionId, epoch:opts.epoch!, windowId:shot.windowId!, processId:shot.processId!, action, x:needsXY ? px : undefined, y:needsXY ? py : undefined, theme:opts.theme, reducedMotion:opts.reducedMotion, effects:opts.effects });
 		await awaitComputerMonitor(opts.storageDir, presentation.id, opts.epoch!, opts.signal);
 		await act(action, px, py, text as string, keys as string, amount as number, shot, opts);
 		await delay(350, undefined, { signal: opts.signal });

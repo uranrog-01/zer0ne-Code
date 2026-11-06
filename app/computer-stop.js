@@ -4,16 +4,40 @@ const path = require('path');
 const { randomUUID } = require('crypto');
 
 // A separate stop token cannot be overwritten by a simultaneous permission edit.
-function requestStop(directory) {
+function writeToken(directory, kind) {
 	fs.mkdirSync(directory, {recursive:true});
 	const temp = path.join(directory, randomUUID() + '.tmp');
-	try { fs.writeFileSync(temp, 'stop:' + randomUUID(), {mode:0o600}); fs.renameSync(temp, path.join(directory,'stop')); }
+	try { fs.writeFileSync(temp, kind + ':' + randomUUID(), {mode:0o600}); fs.renameSync(temp, path.join(directory,'stop')); }
 	finally { fs.rmSync(temp, {force:true}); }
+}
+const requestStop = directory => writeToken(directory, 'stop');
+// Pause keeps the controls on screen (Resume, Stop); Stop dismisses them.
+const requestPause = directory => writeToken(directory, 'pause');
+/**
+ * "Stay ready after restart": with that choice saved in the permissions and at least one app
+ * allowed, the permissions adopt the new stop token, so control is ready again without Resume.
+ * A new epoch still invalidates every observation from before the restart.
+ */
+function resumeAfterRestart(directory) {
+	const file = path.join(directory, 'permissions.json');
+	let p;
+	try { p = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return false; }
+	if (!p || p.resumeOnStart !== true || !Array.isArray(p.allowed) || !p.allowed.length || p.allowed.length > 100) return false;
+	p.stop = fs.readFileSync(path.join(directory, 'stop'), 'utf8');
+	p.paused = false;
+	p.epoch = randomUUID();
+	const temp = path.join(directory, randomUUID() + '.tmp');
+	try { fs.writeFileSync(temp, JSON.stringify(p), {mode:0o600}); fs.renameSync(temp, file); }
+	finally { fs.rmSync(temp, {force:true}); }
+	return true;
 }
 function start(directory, shortcuts) {
 	const key = 'CommandOrControl+Alt+Escape';
 	let registered = false;
-	try { requestStop(directory); } catch (error) { console.error('Computer Use could not be paused at startup:',error.message); }
+	// "start:" tells a restart apart from the user's own Stop, Pause or takeover: only a restart
+	// may be resumed from the chat (and by itself in Full access).
+	try { writeToken(directory, 'start'); } catch (error) { console.error('Computer Use could not be paused at startup:',error.message); }
+	try { resumeAfterRestart(directory); } catch (error) { console.error('Computer Use could not stay ready after restart:',error.message); }
 	let advertised;
 	const refresh = () => {
 		let enabled = false;
@@ -31,4 +55,4 @@ function start(directory, shortcuts) {
 	refresh(); const timer = setInterval(refresh, 200); timer.unref();
 	return () => { clearInterval(timer); if (registered) shortcuts.unregister(key); try { requestStop(directory); fs.rmSync(path.join(directory,'shortcut.json'),{force:true}); } catch { /* Shutdown still cancels engine processes. */ } };
 }
-module.exports = { start, requestStop };
+module.exports = { start, requestStop, requestPause, resumeAfterRestart };

@@ -15,6 +15,7 @@ if (!fs.existsSync(path.join(__dirname, '..', 'engine', 'out', 'chatController.j
 const suites = [
 	'app-units.js',
 	'computer-visuals.js',
+	'computer-effects.js',
 	'stall-sampler.js',
 	'retired-features.js',
 	'start-appearance.js',
