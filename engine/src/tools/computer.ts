@@ -34,6 +34,8 @@ type OpenWindow = { path: string; name: string; title: string; windowId: string;
 /** A window the agent named: its windowId, executable path or name, or its exact title. */
 const named = (w: OpenWindow, app: string) => [w.windowId, w.path.toLowerCase(), w.name.toLowerCase(), w.title.toLowerCase()].includes(app.toLowerCase());
 const isAllowed = (allowed: string[], w: OpenWindow) => allowed.some(file => file.toLowerCase() === w.path.toLowerCase());
+/** zer0ne itself (the engine runs as the app's executable): never offered, allowed or controlled. */
+const isSelf = (w: OpenWindow) => w.path.toLowerCase() === process.execPath.toLowerCase();
 
 function desktopLease(opts: Options) {
 	const dir = path.join(opts.storageDir, 'computer-use');
@@ -122,7 +124,7 @@ async function screenshot(opts: Options): Promise<{ image: MessageImage; geometr
 			if (matches.length !== 1) throw new Error('Choose one allowed open windowId from computer apps, then take a screenshot.');
 			target.push('--focus',`${matches[0].windowId},${matches[0].processId}`);
 		}
-		const r = await run(await winHelper(opts), ['screenshot', jpg, String(MAX_WIDTH), '--policy', computerPolicyFile(opts.storageDir), '--epoch', opts.epoch!, ...target], opts.signal);
+		const r = await run(await winHelper(opts), ['screenshot', jpg, String(MAX_WIDTH), '--policy', computerPolicyFile(opts.storageDir), '--epoch', opts.epoch!, '--deny', process.execPath, ...target], opts.signal);
 		const dims = geometry(JSON.parse(r.out));
 		if (typeof dims.windowId !== 'string' || !/^[1-9]\d*$/.test(dims.windowId) || typeof dims.processId !== 'number' || !Number.isInteger(dims.processId) || dims.processId <= 0) throw new Error('Screenshot returned no active window. Take a new screenshot.');
 		opts.signal.throwIfAborted();
@@ -135,7 +137,7 @@ async function act(action: string, x: number, y: number, text: string, keys: str
 	const args = action === 'type' ? ['type'] : action === 'key' ? ['key', keys] : action === 'scroll' ? ['scroll', String(x), String(y), String(amount)] : action === 'move' ? ['move', String(x), String(y)] : ['click', String(x), String(y), action === 'right_click' ? 'right' : 'left', action === 'double_click' ? '2' : '1'];
 	args.push('--bounds', [shot.left, shot.top, shot.screenWidth, shot.screenHeight].join(','));
 	args.push('--focus', `${shot.windowId},${shot.processId}`);
-	args.push('--policy', computerPolicyFile(opts.storageDir), '--epoch', opts.epoch!);
+	args.push('--policy', computerPolicyFile(opts.storageDir), '--epoch', opts.epoch!, '--deny', process.execPath);
 	await run(exe, args, opts.signal, action === 'type' ? text : undefined);
 }
 
@@ -154,7 +156,7 @@ export async function runComputer(args: Record<string, unknown>, opts: Options) 
 	if (process.platform !== 'win32') throw new Error('Computer Use app permissions currently require Windows. macOS and Linux control is unavailable.');
 	if (typeof args.action !== 'string' || !ACTIONS.includes(args.action)) throw new Error('Unknown computer action.');
 	if (args.action === 'apps') {
-		const policy = computerPolicy(opts.storageDir), all = await computerWindows(opts), seen = new Set<string>();
+		const policy = computerPolicy(opts.storageDir), all = (await computerWindows(opts)).filter(w => !isSelf(w)), seen = new Set<string>();
 		const windows = all.filter(w => isAllowed(policy.allowed, w));
 		// Other open apps by name only: their window titles can hold private content.
 		const available = all.filter(w => !isAllowed(policy.allowed, w) && !seen.has(w.path.toLowerCase()) && seen.add(w.path.toLowerCase())).map(w => ({name:w.name, windowId:w.windowId}));
@@ -181,7 +183,7 @@ async function grantAccess(args: Record<string, unknown>, opts: Options): Promis
 	if (reason === 'user') return 'none';
 	let add: OpenWindow | undefined;
 	if (args.action === 'screenshot' && typeof args.app === 'string') {
-		const policy = computerPolicy(opts.storageDir), matches = (await computerWindows(opts)).filter(w => named(w, args.app as string));
+		const policy = computerPolicy(opts.storageDir), matches = (await computerWindows(opts)).filter(w => !isSelf(w) && named(w, args.app as string));
 		const paths = new Set(matches.map(w => w.path.toLowerCase()));
 		if (matches.length && paths.size === 1 && !matches.some(w => isAllowed(policy.allowed, w))) add = matches[0];
 	}

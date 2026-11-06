@@ -59,7 +59,7 @@ static class Input
 	[DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
 	static IntPtr inputWindow;
 	static uint inputProcess;
-	static string policyFile, policyEpoch;
+	static string policyFile, policyEpoch, denyApp;
 	static bool pointer;
 	static POINT pointerPosition;
 	class Policy { public string epoch; public bool paused; public string[] allowed; public string stop; }
@@ -106,6 +106,8 @@ static class Input
 		string stopFile = Path.Combine(Path.GetDirectoryName(policyFile),"stop"), stop = File.Exists(stopFile) ? ReadShared(stopFile) : "";
 		if ((policy.stop ?? "") != stop) throw new ArgumentException("Computer Use stopped. Resume and take a new screenshot.");
 		string app = WindowApp(window, pid);
+		// The agent's own app: controlling it could answer the agent's own approvals.
+		if (!String.IsNullOrEmpty(denyApp) && String.Equals(app, denyApp, StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("zer0ne cannot control its own window. Bring the app to control to the front, then take a new screenshot.");
 		if (!Array.Exists(policy.allowed, value => String.Equals(value, app, StringComparison.OrdinalIgnoreCase))) throw new ArgumentException("This app is not allowed. Open Computer Use permissions to allow it.");
 	}
 	static Rectangle Bounds(IntPtr window)
@@ -275,6 +277,8 @@ static class Input
 			int policyIndex = Array.IndexOf(args, "--policy"), epochIndex = Array.IndexOf(args, "--epoch");
 			if (policyIndex >= 0 && policyIndex + 1 < args.Length) policyFile = args[policyIndex + 1];
 			if (epochIndex >= 0 && epochIndex + 1 < args.Length) policyEpoch = args[epochIndex + 1];
+			int denyIndex = Array.IndexOf(args, "--deny");
+			if (denyIndex >= 0 && denyIndex + 1 < args.Length) denyApp = args[denyIndex + 1];
 			int focusIndex = Array.IndexOf(args, "--focus");
 			if (focusIndex >= 0)
 			{

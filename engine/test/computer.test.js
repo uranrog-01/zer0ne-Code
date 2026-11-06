@@ -36,7 +36,7 @@ function fixture(platform = 'win32') {
 		queueMicrotask(() => {
 			if (closed || mode === 'hang') return;
 			if (/csc\.exe$/.test(file)) fs.writeFileSync(args.find(a => a.startsWith('-out:')).slice(5), 'fixture executable');
-			else if (args[0] === 'windows') p.stdout.write(JSON.stringify([{path:'C:\\allowed.exe',name:'allowed',title:'Allowed app',windowId:'42',processId:77},{path:'C:\\blocked.exe',name:'blocked',title:'Private app',windowId:'43',processId:78}]));
+			else if (args[0] === 'windows') p.stdout.write(JSON.stringify([{path:'C:\\allowed.exe',name:'allowed',title:'Allowed app',windowId:'42',processId:77},{path:'C:\\blocked.exe',name:'blocked',title:'Private app',windowId:'43',processId:78},{path:process.execPath,name:'zer0ne',title:'zer0ne',windowId:'44',processId:79}]));
 			else if (args[0] === 'screenshot') {
 				fs.writeFileSync(args[1], 'fixture image');
 				p.stdout.write(mode === 'bad-geometry' ? '{}' : JSON.stringify({ windowId: '42', processId: 77, ...bounds }));
@@ -153,7 +153,10 @@ test('app selection lists other apps by name only and asks before allowing one',
 	try {
 		const listed=JSON.parse((await f.run({action:'apps'})).api);
 		assert.equal(listed.windows.length,1); assert.equal(listed.windows[0].name,'allowed'); assert(!JSON.stringify(listed).includes('Private app'),'titles of other apps stay private');
-		assert.deepEqual(listed.available,[{name:'blocked',windowId:'43'}]);
+		assert.deepEqual(listed.available,[{name:'blocked',windowId:'43'}],'zer0ne itself is never offered');
+		let selfAsked=false; await assert.rejects(f.run({action:'screenshot',app:'44'},{approve:async()=>{selfAsked=true;return true;}}),/allowed open/);
+		assert.equal(selfAsked,false,'zer0ne itself is never offered for approval, even in Full access');
+		await f.shot(); const deny=f.calls.at(-1).args; assert.equal(deny[deny.indexOf('--deny')+1],process.execPath,'the helper refuses zer0ne itself');
 		await f.shot({app:'ignored'});
 		let before=f.calls.length, asked='';
 		const declined=await f.run({action:'screenshot',app:'blocked'},{approve:async what=>{asked=what;return false;}});
