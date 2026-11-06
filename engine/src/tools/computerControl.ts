@@ -5,7 +5,7 @@ import { acquireRuntimeLease } from '../runtimeLease';
 
 export interface ComputerPolicy { epoch: string; paused: boolean; allowed: string[]; stop?: string }
 export interface ComputerActivity { id: string; pid: number; action: string; session: string; at: number; epoch: string }
-export interface ComputerPresentation { id: string; pid: number; session: string; epoch: string; at: number; windowId: string; processId: number; action: string; x?: number; y?: number; theme?: string; reducedMotion?: boolean }
+export interface ComputerPresentation { id: string; pid: number; session: string; epoch: string; at: number; windowId: string; processId: number; action: string; x?: number; y?: number; theme?: string; reducedMotion?: boolean; effects?: string }
 export function presentComputer(storage: string, value: Omit<ComputerPresentation, 'id' | 'pid' | 'at'>): ComputerPresentation {
 	const p = { ...value, id: randomUUID(), pid: process.pid, at: Date.now() };
 	const dir = computerDirectory(storage), temp = path.join(dir, randomUUID() + '.tmp');

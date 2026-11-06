@@ -1262,7 +1262,7 @@ async function runToolInner(call: ToolCall, ctx: ToolContext): Promise<ToolOutco
 					throw new Error('Computer use is not available here.');
 				}
 				const theme = ctx.settings.theme;
-				const result = await runComputer(args, { storageDir: ctx.storageDir, sourceFile: path.join(ctx.mediaDir, 'sandbox', 'input.cs'), sessionId: ctx.guardScope ?? ctx.sessionId ?? '', signal: ctx.signal, vision: ctx.vision, theme:theme === 'auto' ? 'auto' : /light|paper|latte|snow|cream/i.test(theme) ? 'light' : 'dark', approve: (what, signal) => approveAction({...ctx,signal}, what, true) });
+				const result = await runComputer(args, { storageDir: ctx.storageDir, sourceFile: path.join(ctx.mediaDir, 'sandbox', 'input.cs'), sessionId: ctx.guardScope ?? ctx.sessionId ?? '', signal: ctx.signal, vision: ctx.vision, theme:theme === 'auto' ? 'auto' : /light|paper|latte|snow|cream/i.test(theme) ? 'light' : 'dark', effects:ctx.settings.computerEffects === 'design' ? 'design' : 'classic', approve: (what, signal) => approveAction({...ctx,signal}, what, true) });
 				return { ...result, image:ctx.settings.computerScreenshotHistory && result.images?.[0] ? `data:${result.images[0].mime};base64,${result.images[0].base64}` : undefined };
 			}
 			

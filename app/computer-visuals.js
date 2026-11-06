@@ -12,6 +12,10 @@ class ComputerVisuals {
 		this.onResume = onResume;
 		this.disposed = false;
 		this.retryAt = 0;
+		// What the overlay reports (one JSON object per line) goes to these listeners.
+		this.listeners = new Set();
+		this.design = false;
+		this.pending = null;
 		if (process.platform !== 'win32') return;
 		fs.mkdirSync(directory, { recursive: true });
 		fs.writeFileSync(path.join(directory, 'monitor-required.json'), JSON.stringify({ pid: process.pid }));
@@ -48,17 +52,47 @@ class ComputerVisuals {
 		const child = this.child = spawn(file, [this.directory, String(process.pid)], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
 		let buffer = '';
 		child.stdout.on('data', chunk => {
-			buffer = (buffer + String(chunk)).slice(-4096);
+			buffer = (buffer + String(chunk)).slice(-65536);
 			let end;
 			while ((end = buffer.indexOf('\n')) >= 0) {
 				const line = buffer.slice(0, end).trim(); buffer = buffer.slice(end + 1);
 				if (line === 'resume' && !this.disposed) this.onResume();
+				else if (line.startsWith('{')) this.report(line);
 			}
 		});
 		child.stderr.on('data', chunk => console.error('Computer Use overlay:', String(chunk).slice(0, 1000)));
 		child.on('error', () => this.fail());
-		child.on('exit', () => { if (this.child === child) this.child = null; if (!this.disposed) this.fail(); });
+		child.on('exit', () => { if (this.child === child) { this.child = null; this.publish({ t: 'state', mode: 'hidden' }); } if (!this.disposed) this.fail(); });
 		child.stdin.on('error', () => {});
+		if (this.design) this.send('effects on');
+	}
+	report(line) {
+		let message;
+		try { message = JSON.parse(line); } catch { return; }
+		if (message?.t === 'capture') { const done = this.pending; this.pending = null; done?.(message); }
+		else if (message?.t === 'state') this.publish(message);
+	}
+	publish(message) { for (const listener of this.listeners) { try { listener(message); } catch (error) { console.error('Computer Use effects:', error.message); } } }
+	send(line) { if (this.child?.stdin.writable) this.child.stdin.write(line + '\n'); }
+	/** Whether the design window can draw: the overlay keeps its own outline and pill until it can. */
+	setDesign(on) { this.design = !!on; this.send(on ? 'effects on' : 'effects off'); }
+	shown(id) { this.send('shown ' + id); }
+	/** The presented window's pixels, or null; the file is read and deleted at once. */
+	capture() {
+		if (!this.child || this.pending) return Promise.resolve(null);
+		const file = path.join(this.directory, `frame-${randomUUID()}.png`);
+		return new Promise(resolve => {
+			const done = message => {
+				clearTimeout(timer);
+				let image = null;
+				try { if (message?.ok && path.resolve(String(message.file)) === path.resolve(file)) image = fs.readFileSync(file); } catch { image = null; }
+				fs.rmSync(file, { force: true });
+				resolve(image && message.rect ? { image, rect: message.rect } : null);
+			};
+			const timer = setTimeout(() => { if (this.pending === done) this.pending = null; done(null); }, 3000);
+			this.pending = done;
+			this.send('capture ' + file);
+		});
 	}
 	fail() {
 		this.retryAt = Date.now() + 10000;

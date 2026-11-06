@@ -24,7 +24,7 @@ export class ComputerUseHost implements HostFeature {
 		const policy = computerPolicy(this.storage), active = computerActivity(this.storage);
 		let shortcut = false;
 		try { const value = JSON.parse(fs.readFileSync(path.join(this.storage,'computer-use','shortcut.json'),'utf8')); if (value.registered && Number.isInteger(value.pid) && value.pid > 0) { process.kill(value.pid,0); shortcut = true; } } catch { /* Editor hosts and unavailable shortcuts use the visible Stop button. */ }
-		return {type:'computerUseState', supported:process.platform === 'win32', enabled:this.enabled, history:this.ctx.store.getSettings().computerScreenshotHistory, paused:policy.paused, shortcut, apps:policy.allowed.map(file => ({path:file,name:path.win32.basename(file,'.exe')})), active:active ? {action:active.action,at:active.at} : null};
+		return {type:'computerUseState', supported:process.platform === 'win32', enabled:this.enabled, history:this.ctx.store.getSettings().computerScreenshotHistory, effects:this.ctx.store.getSettings().computerEffects === 'design' ? 'design' : 'classic', paused:policy.paused, shortcut, apps:policy.allowed.map(file => ({path:file,name:path.win32.basename(file,'.exe')})), active:active ? {action:active.action,at:active.at} : null};
 	}
 	private publish() {
 		if (!this.surfaces.size) return;

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Computer Use permissions have a **Design cursor effects** switch, off by default (off keeps the classic outline and pointer). On, one design-tool cursor replaces the outline: it redraws the controlled window with boxes, size badges, rulers, a guide and typed text, redraws only what changed after each action, and marks each click with the element's box and size. A bar on the window names the app and keeps Pause and Stop. Each action waits until its cursor is on screen. The effects are never in the model's screenshots, and reduced motion or high contrast keeps the classic outline.
+
 ## 0.3.0
 
 - Security: with **Hide secrets from agent commands** on, agent commands and helper processes no longer receive Git's `GIT_CONFIG_COUNT` / `GIT_CONFIG_VALUE_<n>` variables after their `GIT_CONFIG_KEY_<n>` names were removed. A value such as an `http.extraheader` authorization header was passed through, and every `git` command failed with "missing config key".

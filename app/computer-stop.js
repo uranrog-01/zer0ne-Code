@@ -4,12 +4,15 @@ const path = require('path');
 const { randomUUID } = require('crypto');
 
 // A separate stop token cannot be overwritten by a simultaneous permission edit.
-function requestStop(directory) {
+function writeToken(directory, kind) {
 	fs.mkdirSync(directory, {recursive:true});
 	const temp = path.join(directory, randomUUID() + '.tmp');
-	try { fs.writeFileSync(temp, 'stop:' + randomUUID(), {mode:0o600}); fs.renameSync(temp, path.join(directory,'stop')); }
+	try { fs.writeFileSync(temp, kind + ':' + randomUUID(), {mode:0o600}); fs.renameSync(temp, path.join(directory,'stop')); }
 	finally { fs.rmSync(temp, {force:true}); }
 }
+const requestStop = directory => writeToken(directory, 'stop');
+// Pause keeps the controls on screen (Resume, Stop); Stop dismisses them.
+const requestPause = directory => writeToken(directory, 'pause');
 function start(directory, shortcuts) {
 	const key = 'CommandOrControl+Alt+Escape';
 	let registered = false;
@@ -31,4 +34,4 @@ function start(directory, shortcuts) {
 	refresh(); const timer = setInterval(refresh, 200); timer.unref();
 	return () => { clearInterval(timer); if (registered) shortcuts.unregister(key); try { requestStop(directory); fs.rmSync(path.join(directory,'shortcut.json'),{force:true}); } catch { /* Shutdown still cancels engine processes. */ } };
 }
-module.exports = { start, requestStop };
+module.exports = { start, requestStop, requestPause };

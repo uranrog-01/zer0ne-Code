@@ -26,6 +26,7 @@ interface Options {
 	app?: string;
 	theme?: string;
 	reducedMotion?: boolean;
+	effects?: string;
 }
 
 function desktopLease(opts: Options) {
@@ -173,7 +174,7 @@ async function runComputerAction(args: Record<string, unknown>, opts: Options): 
 			const shot = await screenshot(opts);
 			if (shots.size >= 128) shots.delete(shots.keys().next().value!);
 			shots.set(scope, { ...shot.geometry, at: Date.now(), revision: desktop.read(), epoch:opts.epoch! });
-			const presentation = presentComputer(opts.storageDir, { session:opts.sessionId, epoch:opts.epoch!, windowId:shot.geometry.windowId!, processId:shot.geometry.processId!, action:'screenshot', theme:opts.theme, reducedMotion:opts.reducedMotion });
+			const presentation = presentComputer(opts.storageDir, { session:opts.sessionId, epoch:opts.epoch!, windowId:shot.geometry.windowId!, processId:shot.geometry.processId!, action:'screenshot', theme:opts.theme, reducedMotion:opts.reducedMotion, effects:opts.effects });
 			await awaitComputerMonitor(opts.storageDir, presentation.id, opts.epoch!, opts.signal);
 			return { api: `Screenshot (${shot.geometry.width}×${shot.geometry.height}) attached. Use its pixel coordinates.`, summary: 'screenshot', images: [shot.image] };
 		} finally { desktop?.release(); busy = false; }
@@ -193,7 +194,7 @@ async function runComputerAction(args: Record<string, unknown>, opts: Options): 
 	// approval has completed, with a fresh visual acknowledgement before input.
 	const approvalLease = desktopLease(opts);
 	let approvalPresentation: ReturnType<typeof presentComputer>;
-	try { approvalPresentation = presentComputer(opts.storageDir, { session:opts.sessionId, epoch:opts.epoch!, windowId:shot.windowId!, processId:shot.processId!, action:'approval', theme:opts.theme, reducedMotion:opts.reducedMotion }); }
+	try { approvalPresentation = presentComputer(opts.storageDir, { session:opts.sessionId, epoch:opts.epoch!, windowId:shot.windowId!, processId:shot.processId!, action:'approval', theme:opts.theme, reducedMotion:opts.reducedMotion, effects:opts.effects }); }
 	finally { approvalLease.release(); }
 	await awaitComputerMonitor(opts.storageDir, approvalPresentation.id, opts.epoch!, opts.signal);
 	let abortApproval!: () => void;
@@ -213,7 +214,7 @@ async function runComputerAction(args: Record<string, unknown>, opts: Options): 
 		desktop.invalidate();
 		const px = shot.left + Math.min(shot.screenWidth - 1, Math.round((x as number) * shot.screenWidth / shot.width));
 		const py = shot.top + Math.min(shot.screenHeight - 1, Math.round((y as number) * shot.screenHeight / shot.height));
-		const presentation = presentComputer(opts.storageDir, { session:opts.sessionId, epoch:opts.epoch!, windowId:shot.windowId!, processId:shot.processId!, action, x:needsXY ? px : undefined, y:needsXY ? py : undefined, theme:opts.theme, reducedMotion:opts.reducedMotion });
+		const presentation = presentComputer(opts.storageDir, { session:opts.sessionId, epoch:opts.epoch!, windowId:shot.windowId!, processId:shot.processId!, action, x:needsXY ? px : undefined, y:needsXY ? py : undefined, theme:opts.theme, reducedMotion:opts.reducedMotion, effects:opts.effects });
 		await awaitComputerMonitor(opts.storageDir, presentation.id, opts.epoch!, opts.signal);
 		await act(action, px, py, text as string, keys as string, amount as number, shot, opts);
 		await delay(350, undefined, { signal: opts.signal });

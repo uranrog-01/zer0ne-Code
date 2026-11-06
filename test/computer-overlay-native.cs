@@ -69,6 +69,8 @@ class OverlayFixture {
         File.WriteAllText(Path.Combine(folder,"presentation.json"),Json.Serialize(p));File.WriteAllText(Path.Combine(folder,"monitor-required.json"),"{}");
         var start=new ProcessStartInfo(executable,"\""+folder+"\" "+pid){UseShellExecute=false,CreateNoWindow=true,RedirectStandardInput=true,RedirectStandardError=true,RedirectStandardOutput=true};
         using(var monitor=Process.Start(start)) {
+            // The monitor reports its state on stdout; keep the pipe drained.
+            monitor.OutputDataReceived+=(s,e)=>{}; monitor.BeginOutputReadLine();
             try {
                 var until=DateTime.UtcNow.AddSeconds(5);bool ready=false;
                 while(!ready && !monitor.HasExited && DateTime.UtcNow<until){
@@ -88,6 +90,44 @@ class OverlayFixture {
             }
         }
     }
+    static bool Acked(string dir, string id) {
+        try { var ack=Json.Deserialize<System.Collections.Generic.Dictionary<string,object>>(File.ReadAllText(Path.Combine(dir,"monitor-ready.json"))); return (string)ack["id"]==id; } catch { return false; }
+    }
+    // The design effects: drawn by the app's window, guarded here. Classic until that window has
+    // loaded, input held until it reports the visual shown, and classic again if it goes away.
+    static void Design(Form target, string dir, int pid) {
+        var policy=new ComputerOverlay.Policy{epoch="design-epoch",paused=false,allowed=new[]{Application.ExecutablePath},stop=File.ReadAllText(Path.Combine(dir,"stop"))};
+        File.WriteAllText(Path.Combine(dir,"permissions.json"),Json.Serialize(policy));
+        var lines=new System.Collections.Generic.List<string>();
+        using(var overlay=new ComputerOverlay(dir,pid)) {
+            overlay.Output=line=>{lock(lines)lines.Add(line);};
+            var pill=(Form)Field(overlay,"pill"); var frame=(Form)Field(overlay,"outline");
+            var p=new ComputerOverlay.Presentation{id="design-one",pid=pid,processId=pid,windowId=target.Handle.ToInt64().ToString(),epoch=policy.epoch,at=ComputerOverlay.Now,action="click",theme="dark",effects="design",x=target.Left+200,y=target.Top+160};
+            File.WriteAllText(Path.Combine(dir,"presentation.json"),Json.Serialize(p));Tick(overlay);
+            Check(pill.Visible && Acked(dir,"design-one"),"Classic controls and acknowledgement must stay until the design window has loaded");
+            Check(lines.Exists(l=>l.Contains("\"effects\":\"design\"") && l.Contains("\"design\":false")),"The overlay did not ask for the design window");
+            overlay.SetDesign(true);p.id="design-two";File.WriteAllText(Path.Combine(dir,"presentation.json"),Json.Serialize(p));Tick(overlay);
+            Check(!pill.Visible && !frame.Visible,"Design mode must hide the native outline and pill");
+            Check(!Acked(dir,"design-two"),"Input must wait until the design window shows the action");
+            Check(lines.Exists(l=>l.Contains("\"design\":true") && l.Contains("design-two") && l.Contains("\"rect\"")),"The design state was not reported");
+            overlay.Shown("design-two");Tick(overlay);
+            Check(Acked(dir,"design-two"),"The shown visual did not release the action");
+            var shot=Path.Combine(dir,"frame-test.png");overlay.Command("capture "+shot);
+            Check(File.Exists(shot) && lines.Exists(l=>l.Contains("\"t\":\"capture\"") && l.Contains("\"ok\":true")),"The presented window was not captured");
+            using(var image=Image.FromFile(shot)) Check(image.Width>200 && image.Height>200,"The captured window is empty");
+            File.Delete(shot);
+            var outside=Path.Combine(Path.GetTempPath(),"zc-design-outside-"+Guid.NewGuid()+".png");overlay.Command("capture "+outside);
+            Check(!File.Exists(outside) && lines[lines.Count-1].Contains("\"ok\":false"),"A capture outside the Computer Use folder was not refused");
+            overlay.Pause(false,false);
+            Check(!pill.Visible && lines[lines.Count-1].Contains("\"mode\":\"paused\""),"A design pause must be reported, not drawn natively");
+            policy.stop=File.ReadAllText(Path.Combine(dir,"stop"));policy.epoch="design-resumed";p.epoch=policy.epoch;p.id="design-three";
+            File.WriteAllText(Path.Combine(dir,"permissions.json"),Json.Serialize(policy));
+            overlay.SetDesign(false);File.WriteAllText(Path.Combine(dir,"presentation.json"),Json.Serialize(p));Tick(overlay);
+            Check(pill.Visible && Acked(dir,"design-three"),"Without the design window the classic controls must return");
+            overlay.Pause(false,true);Tick(overlay);
+            Check(lines[lines.Count-1].Contains("\"mode\":\"hidden\""),"Stop must hide the design effects");
+        }
+    }
     [STAThread] static int Main(string[] args) {
         SetProcessDPIAware(); Application.EnableVisualStyles();
         var previous=GetForegroundWindow();var previousPointer=Cursor.Position;
@@ -99,6 +139,7 @@ class OverlayFixture {
                 var text=new TextBox{Text="",Location=new System.Drawing.Point(40,70),Width=500};target.Controls.Add(text);
                 target.Show(); ShowWindow(target.Handle,1); Focus(target);
                 using(var overlay=new ComputerOverlay(dir,pid)) {
+                overlay.Output=line=>{};
                 var p=new ComputerOverlay.Presentation{id="observation-one",pid=pid,processId=pid,windowId=target.Handle.ToInt64().ToString(),epoch=policy.epoch,at=ComputerOverlay.Now,action="click",theme="dark",x=target.Left+200,y=target.Top+160};
                 File.WriteAllText(Path.Combine(dir,"presentation.json"),Json.Serialize(p)); Tick(overlay);
                 Check((bool)Field(overlay,"watching"),"Monitor did not arm: " + Field(overlay,"lastError") + "; paused="+Field(overlay,"paused")+"; handoff="+Field(overlay,"handedOff")+"; ready="+File.Exists(Path.Combine(dir,"monitor-ready.json"))+"; target="+target.Bounds+"; primary="+Screen.PrimaryScreen.Bounds);
@@ -126,10 +167,12 @@ class OverlayFixture {
                 overlay.Pause(false,true);Tick(overlay);Check(!pill.Visible,"Stop did not dismiss controls");
                 }
                 Focus(target);
+                Design(target,dir,pid);
+                Focus(target);
                 External(target,text,dir,args[2],args[3]);
                 target.Close();
             }
-            Console.WriteLine("Native overlay passed: observation acknowledgement, injected input, mouse/keyboard handoff, explicit resume, Stop, light/dark and reduced motion.");return 0;
+            Console.WriteLine("Native overlay passed: observation acknowledgement, injected input, mouse/keyboard handoff, explicit resume, Stop, light/dark, reduced motion and the design effects guard.");return 0;
         }catch(Exception e){Console.Error.WriteLine(e);return 1;}
         finally{Cursor.Position=previousPointer;if(previous!=IntPtr.Zero)SetForegroundWindow(previous);}
     }

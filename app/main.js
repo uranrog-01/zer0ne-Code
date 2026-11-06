@@ -221,10 +221,11 @@ if (!app.requestSingleInstanceLock()) {
 			const quick = this.quick.owns(event);
 			const notch = !quick && this.notch.owns(event);
 			const popup = !quick && !notch && this.trayMenu.owns(event);
-			const w = quick || notch || popup ? null : this.views.get(sender.id);
+			const effects = !quick && !notch && !popup && !!this.computerEffects?.owns(event);
+			const w = quick || notch || popup || effects ? null : this.views.get(sender.id);
 			// Only a main frame of this app's own pages; frames inside a page (artifact previews) never reach the shell.
-			if (!quick && !notch && !popup && (!w || event.senderFrame !== sender.mainFrame)) throw new Error('not allowed');
-			const page = quick ? 'quick' : notch ? 'notch' : popup ? 'tray' : w.startView && sender.id === w.startView.webContents.id ? 'start' : 'engine';
+			if (!quick && !notch && !popup && !effects && (!w || event.senderFrame !== sender.mainFrame)) throw new Error('not allowed');
+			const page = quick ? 'quick' : notch ? 'notch' : popup ? 'tray' : effects ? 'effects' : w.startView && sender.id === w.startView.webContents.id ? 'start' : 'engine';
 			if (!allowed(page, cmd)) throw new Error(`${cmd} is not available here`);
 			// Arguments are type-checked and coerced per command; malformed ones refuse the call.
 			args = validated(cmd, args && typeof args === 'object' ? args : {});
@@ -346,6 +347,15 @@ if (!app.requestSingleInstanceLock()) {
 					return this.trayData();
 				case 'tray_action':
 					this.trayMenu.run(args.key);
+					return null;
+				case 'effects_hover':
+					this.computerEffects.hover(args.on);
+					return null;
+				case 'effects_shown':
+					this.computerEffects.shown(args.id);
+					return null;
+				case 'effects_control':
+					this.computerEffects.control(args.action);
 					return null;
 				default:
 					throw new Error(`unknown command: ${cmd}`);
@@ -472,6 +482,7 @@ if (!app.requestSingleInstanceLock()) {
 	app.on('activate', () => shell.showWindows());
 
 	app.on('will-quit', () => {
+		shell.computerEffects?.dispose();
 		shell.computerVisuals?.dispose();
 		shell.stopComputerShortcut?.();
 		shell.quick.unregister();
@@ -494,12 +505,16 @@ if (!app.requestSingleInstanceLock()) {
 
 	app.whenReady().then(() => {
 		shell.stopComputerShortcut = require('./computer-stop').start(path.join(paths.dataDir(),'global','computer-use'), require('electron').globalShortcut);
-		shell.computerVisuals = new (require('./computer-visuals').ComputerVisuals)(path.join(paths.dataDir(), 'global', 'computer-use'), path.join(paths.appRoot(), 'app', 'computer-overlay.cs'), () => {
+		// Resume is never one click on the screen: it opens the permissions, where you choose it.
+		const openComputerUse = () => {
 			const target = shell.quickTarget();
 			if (!target?.active?.view) { shell.showWindows(); return; }
 			target.reveal();
 			target.evalActive('window.__zcComputerUse && window.__zcComputerUse.open()');
-		});
+		};
+		const computerDir = path.join(paths.dataDir(), 'global', 'computer-use');
+		shell.computerVisuals = new (require('./computer-visuals').ComputerVisuals)(computerDir, path.join(paths.appRoot(), 'app', 'computer-overlay.cs'), openComputerUse);
+		shell.computerEffects = new (require('./computer-effects').ComputerEffects)(shell.computerVisuals, computerDir, openComputerUse);
 		// The app's own pages may use the clipboard and nothing else (Electron would otherwise grant every request).
 		const PAGE_PERMISSIONS = new Set(['clipboard-read', 'clipboard-sanitized-write']);
 		session.defaultSession.setPermissionRequestHandler((contents, permission, callback) => callback(!!contents && shell.views.has(contents.id) && PAGE_PERMISSIONS.has(permission)));

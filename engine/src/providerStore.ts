@@ -281,6 +281,8 @@ export interface AgentSettings {
 	/** Screen + mouse/keyboard control (every action approved). Off by default. */
 	computerUse: boolean;
 	computerScreenshotHistory: boolean;
+	/** How Computer Use shows control: 'classic' (window outline and pointer ring) or 'design' (one design-tool cursor that redraws the window). */
+	computerEffects: string;
 	/** image_generate: let the agent create images (opt-in). */
 	imageGenerate: boolean;
 	/** Default image model: `provider/model` or `local:<bundle>`. Empty picks the local Studio when it is installed. */
@@ -511,6 +513,7 @@ export const DEFAULT_SETTINGS: AgentSettings = {
 	debugTools: true,
 	computerUse: false,
 	computerScreenshotHistory: false,
+	computerEffects: 'classic',
 	imageGenerate: false,
 	imageGenModel: '',
 	commandNotices: true,
