@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Settings → **Features** is one grouped list: each feature has a plain description, a switch and, where it has more settings, a Configure link. A summary shows how many are on and what needs your attention, filters show On, Off, Needs attention or Advanced, and extra options appear only once a feature is on. Checks and project runs have their own tab; local language server, code index and browser check files sit under Advanced setup.
+- **Browser & Computer Use**: Computer Use settings (on/off, Design cursor effects, screenshot history and app permissions) are now on the browser page, renamed Browser & Computer Use in the desktop app.
+
 - Computer Use permissions have a **Design cursor effects** switch, off by default (off keeps the classic outline and pointer). On, one design-tool cursor replaces the outline: it redraws the controlled window with boxes, size badges, rulers, a guide and typed text, redraws only what changed after each action, and marks each click with the element's box and size. A bar on the window names the app and keeps Pause and Stop. Each action waits until its cursor is on screen. The effects are never in the model's screenshots, and reduced motion or high contrast keeps the classic outline.
 
 ## 0.3.0

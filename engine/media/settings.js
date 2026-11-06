@@ -77,7 +77,7 @@
 	// Retired rail entries live on inside merged pages; old ids and the chat's
 	// deep links (openSettings('hooks'), …) resolve to the merged page with the
 	// right tab preselected.
-	const SECTION_ALIASES = { subagents: 'agent', hooks: 'hooks-memory', skills: 'plugins', schedule: 'cloud', cloud: 'cloud' };
+	const SECTION_ALIASES = { subagents: 'agent', hooks: 'hooks-memory', skills: 'plugins', schedule: 'cloud', cloud: 'cloud', computer: 'browser' };
 	function normalizeSection(section) {
 		if (desktopHost()) {
 			if (section === 'notch') { S.generalPage = 'notch'; return 'general'; }
@@ -105,7 +105,7 @@
 		[tr('groupData'), [['usage', 'chart', tr('usageStats')]]],
 		// No group header: About sits alone at the bottom of the rail.
 		['', [['about', 'info', 'About']]]
-	].map(([group, items]) => [group, desktopHost() ? items.filter(([id]) => !['finder','cli','mods'].includes(id)).map(([id, icon, label]) => id === 'memory' ? ['hooks-memory', 'memory', 'Hooks & Memory'] : id === 'tasks' ? ['cloud', 'cloud', 'Cloud tasks'] : [id, icon, label]) : items])
+	].map(([group, items]) => [group, desktopHost() ? items.filter(([id]) => !['finder','cli','mods'].includes(id)).map(([id, icon, label]) => id === 'memory' ? ['hooks-memory', 'memory', 'Hooks & Memory'] : id === 'browser' ? ['browser', icon, 'Browser & Computer Use'] : id === 'tasks' ? ['cloud', 'cloud', 'Cloud tasks'] : [id, icon, label]) : items])
 		// Simple view: the essentials; the page you are on stays reachable, and search finds the rest.
 		.map(([group, items]) => [group, !all && simpleView() ? items.filter(([id]) => SIMPLE_SECTIONS.has(id) || id === S.section) : items])
 		.filter(([, items]) => items.length);
@@ -1665,7 +1665,9 @@
 
 	function browserPage() {
 		const root = h('div', 'page');
-		root.appendChild(header('Browser use', 'Web access for the agent, called only when a task needs it — use the preview below to inspect its latest screenshot and activity.'));
+		// Computer Use is Windows desktop control, so only the desktop app shows it here.
+		const computer = desktopHost() && !S.isRemote && featureItems().some(f => f.key === 'computerUse');
+		root.appendChild(computer ? header('Browser & Computer Use', 'How the agent uses the web, a browser of its own and, if you allow it, the apps on your computer. Each is used only when a task needs it.') : header('Browser use', 'Web access for the agent, called only when a task needs it — use the preview below to inspect its latest screenshot and activity.'));
 		root.appendChild(h('div', 'section-label', 'Browser agent'));
 		const found = S.browser.found;
 		root.appendChild(
@@ -1693,6 +1695,21 @@
 			)
 		);
 		root.appendChild(h('div', 'callout', I('info') + '<div>Browser tools: <code>browser_navigate</code>, <code>browser_click</code>, <code>browser_type</code>, <code>browser_press</code>, <code>browser_scroll</code>, <code>browser_snapshot</code>, <code>browser_console</code>, <code>browser_evaluate</code>. Each step returns a screenshot (sent to vision models) and numbered clickable elements; thumbnails appear in the chat — click to enlarge.</div>'));
+		if (computer) {
+			root.appendChild(h('div', 'section-label', 'Computer Use'));
+			const design = '<div class="setting-row"><div class="text"><div class="name">Design cursor effects</div><div class="desc">On: one design-tool cursor redraws the controlled window and marks each click with its box and size. Off: the classic blue outline and pointer. Reduced motion and high contrast always use the outline.</div></div><div class="control"><label class="switch"><input type="checkbox" id="s-computerEffects"' + (S.settings.computerEffects === 'design' ? ' checked' : '') + '><span class="track"></span></label></div></div>';
+			const card = h(
+				'div',
+				'card computer-use-settings',
+				switchRow('Enable Computer Use', 'Let a vision model see and control the Windows apps you allow. Actions are approved unless the chat is in Full access, and moving your mouse or typing pauses it.', 'computerUse') +
+					design +
+					switchRow('Keep screenshots in chat', 'Save what Computer Use sees in the chat so you can review the latest eight. Screenshots may contain app content.', 'computerScreenshotHistory') +
+					'<div class="setting-row"><div class="text"><div class="name">App permissions</div><div class="desc">Choose which apps it may control, and pause, resume or stop it in every project. Ctrl + Alt + Esc stops it from any app.</div></div><div class="control"><button class="btn btn-secondary btn-sm" data-computer-use>Manage apps</button></div></div>'
+			);
+			// A choice of two looks stored as a name, so it has its own handler instead of data-setting.
+			card.querySelector('#s-computerEffects').addEventListener('change', (e) => post({ type: 'updateSettings', patch: { computerEffects: e.target.checked ? 'design' : 'classic' } }));
+			root.appendChild(card);
+		}
 		return root;
 	}
 
