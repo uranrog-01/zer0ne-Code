@@ -143,7 +143,11 @@ class ComputerOverlay : ApplicationContext
             bool ready = policy != null && !policy.paused && policy.epoch == p.epoch && (policy.stop ?? "") == StopToken();
             if (!ready) {
                 if (StopToken().StartsWith("stop:") || policy == null || policy.allowed == null || policy.allowed.Length == 0) { dismissed = p.id; paused = false; Clear(); return; }
-                if (watching) { paused = true; handedOff = false; }
+                // A pause or handoff token is shown as paused even while nothing was watched
+                // (an approval leaves the mouse and keyboard to the user).
+                string token = StopToken();
+                if (token.StartsWith("pause:") || token.StartsWith("handoff:")) { paused = true; handedOff = token.StartsWith("handoff:"); }
+                else if (watching) { paused = true; handedOff = false; }
                 watching = false; outline.Conceal(); if (paused) PaintPill(); else pill.Conceal(); Emit(); return;
             }
             paused = false; handedOff = false;

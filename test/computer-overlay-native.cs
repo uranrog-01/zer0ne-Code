@@ -118,6 +118,11 @@ class OverlayFixture {
             File.Delete(shot);
             var outside=Path.Combine(Path.GetTempPath(),"zc-design-outside-"+Guid.NewGuid()+".png");overlay.Command("capture "+outside);
             Check(!File.Exists(outside) && lines[lines.Count-1].Contains("\"ok\":false"),"A capture outside the Computer Use folder was not refused");
+            // The bar's Pause while an approval waits: nothing watches input then, yet the pause must show.
+            p.action="approval";p.id="design-approval";File.WriteAllText(Path.Combine(dir,"presentation.json"),Json.Serialize(p));Tick(overlay);
+            Check(!(bool)Field(overlay,"watching"),"Approval must leave input to the user");
+            File.WriteAllText(Path.Combine(dir,"stop"),"pause:"+Guid.NewGuid());Tick(overlay);
+            Check(!pill.Visible && lines[lines.Count-1].Contains("\"mode\":\"paused\"") && lines[lines.Count-1].Contains("\"handoff\":false"),"A pause during approval must be reported as paused: "+lines[lines.Count-1]);
             overlay.Pause(false,false);
             Check(!pill.Visible && lines[lines.Count-1].Contains("\"mode\":\"paused\""),"A design pause must be reported, not drawn natively");
             policy.stop=File.ReadAllText(Path.Combine(dir,"stop"));policy.epoch="design-resumed";p.epoch=policy.epoch;p.id="design-three";
